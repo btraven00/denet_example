@@ -1,11 +1,13 @@
 configfile: "config.yaml"
 
+import os
 import shutil
 
 _use_denet_raw = config.get("use_denet", False)
 use_denet = _use_denet_raw if isinstance(_use_denet_raw, bool) else str(_use_denet_raw).lower() in ("true", "1", "yes")
 
 outdir = config.get("outdir", "results")
+
 n_reads = config.get("n_reads", 1_000_000)
 n_chromosomes = config.get("n_chromosomes", 3)
 chr_length = config.get("chr_length", 1_000_000)
@@ -33,6 +35,8 @@ onstart:
     # in the Makefile and CI); scope it to the scheduled jobs if partial reruns matter
     if use_denet:
         shutil.rmtree(f"{outdir}/denet_metrics", ignore_errors=True)
+    if markdup_phase_log and os.path.exists(f"{outdir}/logs/markdup.phases.tsv"):
+        os.remove(f"{outdir}/logs/markdup.phases.tsv")
 
 
 _all_steps = [
@@ -58,6 +62,31 @@ _markdup_group = {
     "collate": f"samtools collate -O -u -@ {{threads}} -T {outdir}/results/markdup_collate {{input.bam}}",
     "collate_fast": "samtools collate -O -u -f -@ {threads} {input.bam}",
 }[config.get("markdup_group", "sort")]
+
+_markdup_stages = [
+    ("group", _markdup_group),
+    ("fixmate", "samtools fixmate -m -@ {threads} - -"),
+    ("sort", "samtools sort -@ {threads} -"),
+    ("markdup", "samtools markdup -@ {threads} - {output.bam}"),
+]
+
+# markdup_phase_log: each pipe stage appends epoch-ms start/end lines and its
+# timestamped stderr (e.g. samtools' spill-merge messages) to params.phases, so
+# the phases can be aligned with denet's ts_ms. Off by default: it adds a bash
+# function and a date call per stderr line to the measured rule.
+_ph_raw = config.get("markdup_phase_log", False)
+markdup_phase_log = _ph_raw if isinstance(_ph_raw, bool) else str(_ph_raw).lower() in ("true", "1", "yes")
+
+if markdup_phase_log:
+    _markdup_cmd = (
+        "ph() {{ local n=$1 rc; shift; "
+        "printf '%s\\tstart\\t%s\\n' \"$(date +%s%3N)\" \"$n\" >> {params.phases}; "
+        "\"$@\" 2> >(while IFS= read -r l; do printf '%s\\t%s\\t%s\\n' \"$(date +%s%3N)\" \"$n\" \"$l\"; done >> {params.phases}) && rc=0 || rc=$?; "
+        "printf '%s\\tend\\t%s\\n' \"$(date +%s%3N)\" \"$n\" >> {params.phases}; return $rc; }}; "
+        + "( " + " | ".join(f"ph {n} {c}" for n, c in _markdup_stages) + " ) 2> {log}"
+    )
+else:
+    _markdup_cmd = "( " + " | ".join(c for _, c in _markdup_stages) + " ) 2> {log}"
 
 
 rule all:
@@ -229,15 +258,11 @@ rule markdup:
         repeat(f"{outdir}/benchmarks/markdup.tsv", bench_repeats)
     conda:
         "envs/genome_tools.yaml"
+    params:
+        phases=f"{outdir}/logs/markdup.phases.tsv",
     threads: 2
     shell:
-        wrap(
-            "( " + _markdup_group + """ \
-                | samtools fixmate -m -@ {threads} - - \
-                | samtools sort -@ {threads} - \
-                | samtools markdup -@ {threads} - {output.bam} ) 2> {log}""",
-            "markdup",
-        )
+        wrap(_markdup_cmd, "markdup")
 
 
 rule index_markdup:
