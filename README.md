@@ -12,7 +12,7 @@ The two conditions are:
 - conda or mamba
 - snakemake (conda-managed)
 
-denet 0.8.0 comes with the rule environment (`envs/genome_tools.yaml`, locked
+denet 0.9.0 comes with the rule environment (`envs/genome_tools.yaml`, locked
 in `envs/genome_tools.linux-64.pin.txt`) from the
 [almost-conductor](https://prefix.dev/channels/almost-conductor) channel;
 `--use-conda` installs it, nothing to set up by hand.
