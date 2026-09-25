@@ -113,12 +113,20 @@ read_denet_jsonl <- function(f) {
   }))
 }
 
+# One file per repeat, <step>.<ns timestamp>.jsonl; the timestamp orders the repeats.
+# Older runs wrote <step>.jsonl with all repeats appended; the in-file split above
+# still numbers those.
 denet_ts <- lapply(denet_files, function(f) {
   df <- read_denet_jsonl(f)
   if (is.null(df) || nrow(df) == 0) return(NULL)
-  df$step <- str_remove(basename(f), "\\.jsonl$")
+  df$step    <- str_remove(basename(f), "(\\.\\d+)?\\.jsonl$")
+  df$file_ts <- as.numeric(str_match(basename(f), "\\.(\\d+)\\.jsonl$")[, 2])
   df
 }) |> bind_rows() |>
+  group_by(step) |>
+  mutate(repeat_id = if (all(is.na(file_ts))) repeat_id else dense_rank(file_ts)) |>
+  ungroup() |>
+  select(-file_ts) |>
   mutate(step_label = factor(step_labels[step], levels = step_labels))
 
 stopifnot(nrow(denet_ts) > 0)

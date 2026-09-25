@@ -1,5 +1,7 @@
 configfile: "config.yaml"
 
+import shutil
+
 _use_denet_raw = config.get("use_denet", False)
 use_denet = _use_denet_raw if isinstance(_use_denet_raw, bool) else str(_use_denet_raw).lower() in ("true", "1", "yes")
 
@@ -13,7 +15,9 @@ dup_fraction = float(config.get("dup_fraction", 0.0))
 
 def wrap(cmd, step):
     if use_denet:
-        out = f"{outdir}/denet_metrics/{step}.jsonl"
+        # one JSONL per benchmark repeat: denet -o overwrites, and Snakemake doesn't
+        # expose the repeat index, so a nanosecond timestamp orders the repeats
+        out = f"{outdir}/denet_metrics/{step}.$(date +%s%N).jsonl"
         return "\n".join([
             f"mkdir -p {outdir}/denet_metrics",
             f"( {cmd} ) &",
@@ -22,6 +26,13 @@ def wrap(cmd, step):
             "wait $_denet_pid",
         ])
     return cmd
+
+
+onstart:
+    # ponytail: wipes every step's traces, assumes whole-workflow runs (--forceall, as
+    # in the Makefile and CI); scope it to the scheduled jobs if partial reruns matter
+    if use_denet:
+        shutil.rmtree(f"{outdir}/denet_metrics", ignore_errors=True)
 
 
 _all_steps = [
