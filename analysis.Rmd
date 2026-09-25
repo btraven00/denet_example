@@ -54,11 +54,10 @@ read_benchmarks <- function(outdir, condition) {
 
 baseline     <- read_benchmarks("results_baseline",    "Snakemake")
 denet_wrap   <- read_benchmarks("results_denet",        "Snakemake + denet wrap")
-denet_native <- read_benchmarks("results_denet_native", "Snakemake + denet native")
 
-condition_levels <- c("Snakemake", "Snakemake + denet wrap", "Snakemake + denet native")
+condition_levels <- c("Snakemake", "Snakemake + denet wrap")
 
-bench <- bind_rows(baseline, denet_wrap, denet_native) |>
+bench <- bind_rows(baseline, denet_wrap) |>
   mutate(
     step_label = factor(step_labels[step], levels = step_labels),
     condition  = factor(condition, levels = condition_levels)
@@ -154,8 +153,7 @@ p_time <- ggplot(bench_summary,
                      minor_breaks = c(0.5, 2, 5, 20, 50),
                      labels = label_number(accuracy = 0.1)) +
   scale_fill_manual(values = c("Snakemake" = "#4C72B0",
-                               "Snakemake + denet wrap" = "#DD8452",
-                               "Snakemake + denet native" = "#55A868")) +
+                               "Snakemake + denet wrap" = "#DD8452")) +
   labs(x = NULL, y = "Wall-clock time (s, log1p scale)", fill = NULL,
        title = "A  Wall-clock time per step",
        subtitle = paste0("mean +/- 1 SD, n = ", n_repeats, " repeats")) +
@@ -184,8 +182,7 @@ p_rss <- ggplot(rss_summary,
                      minor_breaks = c(3, 50, 200, 500, 2000),
                      labels = label_number(accuracy = 1)) +
   scale_fill_manual(values = c("Snakemake" = "#4C72B0",
-                               "Snakemake + denet wrap" = "#DD8452",
-                               "Snakemake + denet native" = "#55A868")) +
+                               "Snakemake + denet wrap" = "#DD8452")) +
   labs(x = NULL, y = "Peak RSS (MB, log1p scale)", fill = NULL,
        title = "B  Peak resident memory per step",
        subtitle = paste0("mean +/- 1 SD, n = ", n_repeats, " repeats")) +
@@ -214,8 +211,7 @@ p_io_bar <- ggplot(io_summary,
                      minor_breaks = c(3, 50, 200, 500, 2000),
                      labels = label_number(accuracy = 1)) +
   scale_fill_manual(values = c("Snakemake" = "#4C72B0",
-                               "Snakemake + denet wrap" = "#DD8452",
-                               "Snakemake + denet native" = "#55A868")) +
+                               "Snakemake + denet wrap" = "#DD8452")) +
   labs(x = NULL, y = "Disk write (MB, log1p scale)", fill = NULL,
        title = "C  Disk write per step",
        subtitle = paste0("mean +/- 1 SD, n = ", n_repeats, " repeats")) +
@@ -288,7 +284,7 @@ p_io <- ggplot(denet_ts,
         panel.grid = element_blank())
 ```
 
-```{r combined-figure, fig.cap="Resource profiling of a simulated read alignment workflow. (A, B, C) Mean wall-clock time, peak RSS, and disk bytes written per pipeline step under three conditions: Snakemake (baseline, no denet), Snakemake + denet wrap (denet attached to each rule subprocess via a shell wrapper), and Snakemake + denet native (denet on PATH, no explicit wrap, rules run unmodified). Error bars are +/- 1 SD across benchmark repeats. SD was chosen over SE or CV to express absolute run-to-run variability in interpretable units. (D, E, F) CPU, RSS, and cumulative disk-write timeseries recorded by denet at 50 ms intervals for the wrap condition, faceted by rule in pipeline order. Elapsed time is relative to the start of each repeat."}
+```{r combined-figure, fig.cap="Resource profiling of a simulated read alignment workflow. (A, B, C) Mean wall-clock time, peak RSS, and disk bytes written per pipeline step under two conditions: Snakemake (baseline, no denet) and Snakemake + denet wrap (denet attached to each rule subprocess via a shell wrapper). Error bars are +/- 1 SD across benchmark repeats. SD was chosen over SE or CV to express absolute run-to-run variability in interpretable units. (D, E, F) CPU, RSS, and cumulative disk-write timeseries recorded by denet at 50 ms intervals for the wrap condition, faceted by rule in pipeline order. Elapsed time is relative to the start of each repeat."}
 fig <- (p_time | p_rss | p_io_bar) / (p_cpu | p_mem | p_io) +
   plot_layout(guides = "collect") &
   theme(legend.position = "bottom",

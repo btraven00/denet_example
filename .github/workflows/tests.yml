@@ -119,52 +119,9 @@ jobs:
             .snakemake/log/
           if-no-files-found: ignore
 
-  integration-denet-native:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash -el {0}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: mamba-org/setup-micromamba@v2
-        with:
-          environment-name: snakemake
-          create-args: python=3.12 snakemake
-          condarc: |
-            channels:
-              - conda-forge
-              - bioconda
-
-      - name: cache conda environments
-        uses: actions/cache@v4
-        with:
-          path: .snakemake/conda
-          key: snakemake-conda-${{ hashFiles('envs/genome_tools.yaml') }}
-
-      - name: run denet native pipeline
-        run: |
-          snakemake \
-            --config use_denet_native=true outdir=results_denet_native n_reads=10000 n_chromosomes=2 chr_length=100000 benchmark_repeats=3 dup_fraction=0.2 \
-            --use-conda \
-            --nolock \
-            --rerun-incomplete \
-            --cores 4
-
-      - name: upload benchmarks
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: denet-native-outputs
-          path: |
-            results_denet_native/logs/
-            results_denet_native/benchmarks/
-            .snakemake/log/
-          if-no-files-found: ignore
-
   render-report:
     runs-on: ubuntu-latest
-    needs: [integration-baseline, integration-denet, integration-denet-native]
+    needs: [integration-baseline, integration-denet]
     defaults:
       run:
         shell: bash -el {0}
@@ -190,12 +147,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: denet-outputs
-          path: .
-
-      - name: download denet native outputs
-        uses: actions/download-artifact@v4
-        with:
-          name: denet-native-outputs
           path: .
 
       - name: render report

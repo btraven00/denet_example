@@ -1,15 +1,7 @@
 configfile: "config.yaml"
 
-import os
-
 _use_denet_raw = config.get("use_denet", False)
 use_denet = _use_denet_raw if isinstance(_use_denet_raw, bool) else str(_use_denet_raw).lower() in ("true", "1", "yes")
-
-_use_denet_native_raw = config.get("use_denet_native", False)
-use_denet_native = _use_denet_native_raw if isinstance(_use_denet_native_raw, bool) else str(_use_denet_native_raw).lower() in ("true", "1", "yes")
-
-if use_denet_native:
-    shell.prefix("export PATH=\"" + os.path.expanduser("~/.cargo/bin") + ":$PATH\"; ")
 
 outdir = config.get("outdir", "results")
 n_reads = config.get("n_reads", 1_000_000)

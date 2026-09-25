@@ -3,14 +3,13 @@ CONDA_RUN  := source ~/miniconda3/bin/activate && conda activate snakemake
 SMK        := snakemake --use-conda --conda-frontend conda --cores 10
 PAPER_DIR  := $(HOME)/src/2025_denet_profiler_appnote
 
-.PHONY: all conda-envs baseline denet denet-native setup-r-env figures clean
+.PHONY: all conda-envs baseline denet setup-r-env figures clean
 
-all: baseline denet denet-native figures
+all: baseline denet figures
 
 conda-envs:
 	$(CONDA_RUN) && \
-	$(SMK) --config use_denet=false outdir=results_baseline --conda-create-envs-only && \
-	$(SMK) --config use_denet_native=true outdir=results_denet_native --conda-create-envs-only
+	$(SMK) --config use_denet=false outdir=results_baseline --conda-create-envs-only
 
 baseline: conda-envs
 	$(CONDA_RUN) && \
@@ -19,10 +18,6 @@ baseline: conda-envs
 denet: conda-envs
 	$(CONDA_RUN) && \
 	$(SMK) --config use_denet=true outdir=results_denet --forceall
-
-denet-native: conda-envs
-	$(CONDA_RUN) && \
-	$(SMK) --config use_denet_native=true outdir=results_denet_native --forceall
 
 setup-r-env:
 	source ~/miniconda3/bin/activate && \
@@ -38,4 +33,4 @@ figures: setup-r-env
 	cp figures/analysis.html $(PAPER_DIR)/figures/denet_benchmark.html
 
 clean:
-	rm -rf results_baseline results_denet results_denet_native figures __pycache__ .snakemake
+	rm -rf results_baseline results_denet figures __pycache__ .snakemake
