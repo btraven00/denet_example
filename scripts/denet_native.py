@@ -76,8 +76,11 @@ class DenetBenchmarkTimer:
         r.max_rss = max(r.max_rss or 0, agg["mem_rss_kb"] / 1024)
         r.max_vms = max(r.max_vms or 0, agg["mem_vms_kb"] / 1024)
         r.max_uss = r.max_pss = "NA"
-        r.io_in = agg["disk_read_bytes"] / 2**20
-        r.io_out = agg["disk_write_bytes"] / 2**20
+        # Tree I/O is cumulative (exited children fold into their parent), so a
+        # drop is a sampling race, e.g. a final sample of a process caught while
+        # exiting reads zeros. Keep the maximum.
+        r.io_in = max(r.io_in or 0, agg["disk_read_bytes"] / 2**20)
+        r.io_out = max(r.io_out or 0, agg["disk_write_bytes"] / 2**20)
         # Snakemake: cpu_usage is percent-seconds (mean_load = cpu_usage / wall),
         # cpu_time is CPU seconds
         r.cpu_usage = self._cpu_pct_s
