@@ -1,7 +1,9 @@
 use_denet: false
 outdir: "results"
-n_reads: 1000000
+# Paper scale: 5 x 10 Mb genome, 5M read pairs of 150 bp (30x), plus 20%
+# injected PCR-like duplicates so markdup has real work to do.
+n_reads: 5000000
 n_chromosomes: 5
-chr_length: 100000
+chr_length: 10000000
 benchmark_repeats: 3
-dup_fraction: 0.0
+dup_fraction: 0.2

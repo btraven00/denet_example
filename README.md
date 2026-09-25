@@ -19,10 +19,11 @@ in `envs/genome_tools.linux-64.pin.txt`) from the
 
 ## Configuration
 
-Workflow parameters are set in `config.yaml`. By default the pipeline simulates
-a 500 kb genome (5 chromosomes of 100 kb each) and 1 million paired-end reads
-of 150 bp, with 3 benchmark repeats per rule. The output directory defaults to
-`results/`. The `use_denet` flag selects the condition; it defaults to false (baseline run).
+Workflow parameters are set in `config.yaml`, and its defaults are the paper's
+settings: a 50 Mb genome (5 chromosomes of 10 Mb each), 5 million paired-end
+reads of 150 bp (30x coverage), 20% injected duplicates (`dup_fraction: 0.2`),
+and 3 benchmark repeats per rule. The output directory defaults to `results/`.
+The `use_denet` flag selects the condition; it defaults to false (baseline run).
 
 ### Pipeline stages
 
@@ -35,14 +36,13 @@ bcftools call -mv`).
 markdup has real work to do; at 0, markdup only sees coordinate collisions from
 oversampling.
 
-### Paper-figure settings
+### Paper runs and quick runs
 
-The defaults in `config.yaml` are small for fast local iteration. The paper
-figure uses larger inputs so the resource profiles have visible shape. Expect
-roughly 10 minutes per condition on 4 cores;
-`call_variants` (`bcftools mpileup` / `bcftools call`, both run with 2 threads)
-and `align` dominate. `benchmark_repeats` multiplies every rule's wall time and
-is the main knob if you are over budget.
+The defaults reproduce the paper and take roughly 1 to 2 hours per condition on
+4 cores with 3 repeats (estimated from pilots on an AMD EPYC 7742 and an Opteron
+6376). `align`, `simulate_reads` and `markdup` dominate. For a quick run, use
+the CI scale, e.g. `--config n_reads=10000 n_chromosomes=2 chr_length=100000
+benchmark_repeats=1`.
 
 Benchmark runs activate the rule environment once instead of per job:
 `--use-conda` starts every job by running a ~90 MB `conda` process for ~0.3 s,
@@ -53,8 +53,8 @@ then ignored). The Makefile targets do this for you.
 ```
 snakemake --use-conda --conda-create-envs-only --cores 1
 ENV=$(snakemake --use-conda --list-conda-envs --cores 1 | awk -F'\t' '$1=="envs/genome_tools.yaml"{print $3}')
-PATH="$PWD/$ENV/bin:$PATH" snakemake --cores 4 --forceall --config use_denet=false outdir=results_baseline n_chromosomes=2 chr_length=5000000 n_reads=1500000 dup_fraction=0.2
-PATH="$PWD/$ENV/bin:$PATH" snakemake --cores 4 --forceall --config use_denet=true outdir=results_denet n_chromosomes=2 chr_length=5000000 n_reads=1500000 dup_fraction=0.2
+PATH="$PWD/$ENV/bin:$PATH" snakemake --cores 4 --forceall --config use_denet=false outdir=results_baseline
+PATH="$PWD/$ENV/bin:$PATH" snakemake --cores 4 --forceall --config use_denet=true outdir=results_denet
 ```
 
 ## Running locally
