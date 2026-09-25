@@ -128,11 +128,14 @@ p_time <- ggplot(bench_summary,
            ymin = pmax(mean_s - sd_s, 0), ymax = mean_s + sd_s)) +
   geom_col(position = position_dodge(0.75), width = 0.65) +
   geom_errorbar(position = position_dodge(0.75), width = 0.25) +
-  scale_y_continuous(trans = "log1p", labels = label_number(accuracy = 0.1)) +
+  scale_y_continuous(trans = "log1p",
+                     breaks = c(0, 1, 3, 10, 30, 100),
+                     minor_breaks = c(0.5, 2, 5, 20, 50),
+                     labels = label_number(accuracy = 0.1)) +
   scale_fill_manual(values = c("Snakemake" = "#4C72B0",
                                "Snakemake + denet wrap" = "#DD8452",
                                "Snakemake + denet native" = "#55A868")) +
-  labs(x = NULL, y = "Wall-clock time (s)", fill = NULL,
+  labs(x = NULL, y = "Wall-clock time (s, log1p scale)", fill = NULL,
        title = "A  Wall-clock time per step",
        subtitle = paste0("mean +/- 1 SD, n = ", n_repeats, " repeats")) +
   theme_bw(base_size = 13) +
@@ -155,11 +158,14 @@ p_rss <- ggplot(rss_summary,
            ymin = pmax(mean_rss - sd_rss, 0), ymax = mean_rss + sd_rss)) +
   geom_col(position = position_dodge(0.75), width = 0.65) +
   geom_errorbar(position = position_dodge(0.75), width = 0.25) +
-  scale_y_continuous(trans = "log1p", labels = label_number(accuracy = 1)) +
+  scale_y_continuous(trans = "log1p",
+                     breaks = c(0, 10, 30, 100, 300, 1000, 3000),
+                     minor_breaks = c(3, 50, 200, 500, 2000),
+                     labels = label_number(accuracy = 1)) +
   scale_fill_manual(values = c("Snakemake" = "#4C72B0",
                                "Snakemake + denet wrap" = "#DD8452",
                                "Snakemake + denet native" = "#55A868")) +
-  labs(x = NULL, y = "Peak RSS (MB)", fill = NULL,
+  labs(x = NULL, y = "Peak RSS (MB, log1p scale)", fill = NULL,
        title = "B  Peak resident memory per step",
        subtitle = paste0("mean +/- 1 SD, n = ", n_repeats, " repeats")) +
   theme_bw(base_size = 13) +
@@ -182,11 +188,14 @@ p_io_bar <- ggplot(io_summary,
            ymin = pmax(mean_io - sd_io, 0), ymax = mean_io + sd_io)) +
   geom_col(position = position_dodge(0.75), width = 0.65) +
   geom_errorbar(position = position_dodge(0.75), width = 0.25) +
-  scale_y_continuous(trans = "log1p", labels = label_number(accuracy = 1)) +
+  scale_y_continuous(trans = "log1p",
+                     breaks = c(0, 10, 30, 100, 300, 1000, 3000),
+                     minor_breaks = c(3, 50, 200, 500, 2000),
+                     labels = label_number(accuracy = 1)) +
   scale_fill_manual(values = c("Snakemake" = "#4C72B0",
                                "Snakemake + denet wrap" = "#DD8452",
                                "Snakemake + denet native" = "#55A868")) +
-  labs(x = NULL, y = "Disk write (MB)", fill = NULL,
+  labs(x = NULL, y = "Disk write (MB, log1p scale)", fill = NULL,
        title = "C  Disk write per step",
        subtitle = paste0("mean +/- 1 SD, n = ", n_repeats, " repeats")) +
   theme_bw(base_size = 13) +
@@ -205,9 +214,11 @@ p_cpu <- ggplot(denet_ts,
              labeller = labeller(step_label = ts_facet_labels)) +
   scale_x_continuous(n.breaks = 4) +
   scale_y_continuous(trans = "log10",
+                     breaks = c(1, 11, 101, 1001),
+                     minor_breaks = c(2, 6, 21, 51, 201, 501),
                      labels = function(x) round(x - 1, 0)) +
   scale_color_brewer(palette = "Set2") +
-  labs(x = "Elapsed time (s)", y = "CPU usage (%)",
+  labs(x = "Elapsed time (s)", y = "CPU usage (%, log10 scale; 100% = one core)",
        title = "D  CPU usage per rule (all repeats)") +
   guides(color = "none") +
   theme_bw(base_size = 13) +
@@ -227,7 +238,7 @@ p_mem <- ggplot(denet_ts,
   scale_x_continuous(n.breaks = 4) +
   scale_y_log10(labels = label_number(accuracy = 1)) +
   scale_color_brewer(palette = "Set2") +
-  labs(x = "Elapsed time (s)", y = "RSS (MB)",
+  labs(x = "Elapsed time (s)", y = "RSS (MB, log10 scale)",
        title = "E  Memory usage per rule (all repeats)") +
   guides(color = "none") +
   theme_bw(base_size = 13) +

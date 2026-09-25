@@ -26,7 +26,7 @@ def wrap(cmd, step):
             f"mkdir -p {outdir}/denet_metrics",
             f"( {cmd} ) &",
             "_denet_pid=$!",
-            f"denet -o {out} -i 50 -m 500 -q --nodump attach $_denet_pid || true",
+            f"denet -o {out} -i 50 -m 500 -q attach $_denet_pid || true",
             "wait $_denet_pid",
         ])
     return cmd
