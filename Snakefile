@@ -2,11 +2,22 @@ configfile: "config.yaml"
 
 import os
 import shutil
+import sys
 
 _use_denet_raw = config.get("use_denet", False)
 use_denet = _use_denet_raw if isinstance(_use_denet_raw, bool) else str(_use_denet_raw).lower() in ("true", "1", "yes")
 
 outdir = config.get("outdir", "results")
+
+_use_denet_native_raw = config.get("use_denet_native", False)
+use_denet_native = _use_denet_native_raw if isinstance(_use_denet_native_raw, bool) else str(_use_denet_native_raw).lower() in ("true", "1", "yes")
+
+if use_denet_native:
+    # denet replaces Snakemake's psutil benchmark sampler; rules are unchanged
+    sys.path.insert(0, f"{workflow.basedir}/scripts")
+    import denet_native
+
+    denet_native.install(f"{outdir}/denet_native")
 
 n_reads = config.get("n_reads", 1_000_000)
 n_chromosomes = config.get("n_chromosomes", 3)
@@ -35,6 +46,8 @@ onstart:
     # in the Makefile and CI); scope it to the scheduled jobs if partial reruns matter
     if use_denet:
         shutil.rmtree(f"{outdir}/denet_metrics", ignore_errors=True)
+    if use_denet_native:
+        shutil.rmtree(f"{outdir}/denet_native", ignore_errors=True)
     if markdup_phase_log and os.path.exists(f"{outdir}/logs/markdup.phases.tsv"):
         os.remove(f"{outdir}/logs/markdup.phases.tsv")
 
