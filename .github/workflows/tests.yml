@@ -98,20 +98,6 @@ jobs:
           path: .snakemake/conda
           key: snakemake-conda-${{ hashFiles('envs/genome_tools.yaml') }}
 
-      - name: cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.cargo/bin/denet
-          key: cargo-denet-${{ runner.os }}
-
-      - name: install denet
-        run: |
-          which denet || cargo install denet
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
       - name: run denet pipeline
         run: |
           snakemake \
@@ -155,20 +141,6 @@ jobs:
         with:
           path: .snakemake/conda
           key: snakemake-conda-${{ hashFiles('envs/genome_tools.yaml') }}
-
-      - name: cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.cargo/bin/denet
-          key: cargo-denet-${{ runner.os }}
-
-      - name: install denet
-        run: |
-          which denet || cargo install denet
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: run denet native pipeline
         run: |

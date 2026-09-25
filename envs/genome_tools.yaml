@@ -2,6 +2,7 @@ name: genome_tools
 channels:
   - conda-forge
   - bioconda
+  - https://prefix.dev/almost-conductor
   - defaults
 dependencies:
   - python
@@ -10,3 +11,4 @@ dependencies:
   - ncurses
   - samtools=1.20
   - bcftools=1.20
+  - denet==0.8.0

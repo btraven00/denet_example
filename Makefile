@@ -18,12 +18,10 @@ baseline: conda-envs
 
 denet: conda-envs
 	$(CONDA_RUN) && \
-	PATH="$(HOME)/.cargo/bin:$$PATH" \
 	$(SMK) --config use_denet=true outdir=results_denet --forceall
 
 denet-native: conda-envs
 	$(CONDA_RUN) && \
-	PATH="$(HOME)/.cargo/bin:$$PATH" \
 	$(SMK) --config use_denet_native=true outdir=results_denet_native --forceall
 
 setup-r-env:

@@ -50,3 +50,4 @@ https://conda.anaconda.org/conda-forge/noarch/pip-26.0.1-pyh145f28c_0.conda#09a9
 https://conda.anaconda.org/conda-forge/linux-64/gsl-2.7-he838d99_0.tar.bz2#fec079ba39c9cca093bf4c00001825de
 https://conda.anaconda.org/bioconda/linux-64/samtools-1.20-h50ea8bc_1.tar.bz2#1a4c52f8079fea1b18b3e4bd329bab3a
 https://conda.anaconda.org/bioconda/linux-64/bcftools-1.20-h8b25389_1.tar.bz2#7dea9d0b49ecf4a553472add3d297729
+https://prefix.dev/almost-conductor/linux-64/denet-0.8.0-hb0f4dca_0.conda#18ec675d9303cf5801bb674881a31655

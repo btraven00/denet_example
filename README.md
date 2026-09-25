@@ -12,13 +12,11 @@ The three conditions are:
 
 - conda or mamba
 - snakemake (conda-managed)
-- Rust toolchain for denet; install denet with:
 
-```
-cargo install denet
-```
-
-denet is not available via conda and must be installed this way for the denet wrap and denet native conditions.
+denet 0.8.0 comes with the rule environment (`envs/genome_tools.yaml`, locked
+in `envs/genome_tools.linux-64.pin.txt`) from the
+[almost-conductor](https://prefix.dev/channels/almost-conductor) channel;
+`--use-conda` installs it, nothing to set up by hand.
 
 ## Configuration
 
@@ -66,11 +64,11 @@ The workflow in `.github/workflows/tests.yml` runs on every push to `master` and
 
 - `dry-run`: validates the Snakefile DAG without executing anything.
 - `integration-baseline`: runs the baseline condition and uploads logs and benchmarks as artifacts.
-- `integration-denet`: installs denet, runs the denet wrap condition, and uploads logs, benchmarks, and denet metrics as artifacts.
-- `integration-denet-native`: installs denet, runs the denet native condition, and uploads logs and benchmarks as artifacts.
+- `integration-denet`: runs the denet wrap condition, and uploads logs, benchmarks, and denet metrics as artifacts.
+- `integration-denet-native`: runs the denet native condition, and uploads logs and benchmarks as artifacts.
 - `render-report`: downloads artifacts from all three integration jobs and renders the HTML report and PDF figure, uploaded as artifacts on success.
 
-The three integration jobs run in parallel. CI uses reduced parameters (10k reads, 2 chromosomes, 100 kb each, 3 benchmark repeats) to keep runtime short. Conda environments and the denet binary are cached between runs.
+The three integration jobs run in parallel. CI uses reduced parameters (10k reads, 2 chromosomes, 100 kb each, 3 benchmark repeats) to keep runtime short. Rule conda environments, including denet, are cached between runs.
 
 ## License
 
