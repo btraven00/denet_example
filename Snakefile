@@ -49,6 +49,17 @@ _all_steps = [
 ]
 
 
+# How markdup groups mates for fixmate. "sort" is a full name sort, which holds
+# the whole input in memory while the downstream coordinate sort fills its own
+# buffer. "collate" only brings mates together (temp files, small memory);
+# "collate_fast" keeps a small in-memory window and needs one alignment per read.
+_markdup_group = {
+    "sort": "samtools sort -n -@ {threads} {input.bam}",
+    "collate": f"samtools collate -O -u -@ {{threads}} -T {outdir}/results/markdup_collate {{input.bam}}",
+    "collate_fast": "samtools collate -O -u -f -@ {threads} {input.bam}",
+}[config.get("markdup_group", "sort")]
+
+
 rule all:
     input:
         f"{outdir}/results/aligned.bam.bai",
@@ -221,7 +232,7 @@ rule markdup:
     threads: 2
     shell:
         wrap(
-            """( samtools sort -n -@ {threads} {input.bam} \
+            "( " + _markdup_group + """ \
                 | samtools fixmate -m -@ {threads} - - \
                 | samtools sort -@ {threads} - \
                 | samtools markdup -@ {threads} - {output.bam} ) 2> {log}""",
