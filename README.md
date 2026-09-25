@@ -44,9 +44,17 @@ roughly 10 minutes per condition on 4 cores;
 and `align` dominate. `benchmark_repeats` multiplies every rule's wall time and
 is the main knob if you are over budget.
 
+Benchmark runs activate the rule environment once instead of per job:
+`--use-conda` starts every job by running a ~90 MB `conda` process for ~0.3 s,
+which would dominate the peak memory of short rules. Build the environment,
+put it on `PATH`, and run without `--use-conda` (the `conda:` directives are
+then ignored). The Makefile targets do this for you.
+
 ```
-snakemake --use-conda --cores 4 --forceall --config use_denet=false outdir=results_baseline n_chromosomes=2 chr_length=5000000 n_reads=1500000 dup_fraction=0.2
-snakemake --use-conda --cores 4 --forceall --config use_denet=true outdir=results_denet n_chromosomes=2 chr_length=5000000 n_reads=1500000 dup_fraction=0.2
+snakemake --use-conda --conda-create-envs-only --cores 1
+ENV=$(snakemake --use-conda --list-conda-envs --cores 1 | awk -F'\t' '$1=="envs/genome_tools.yaml"{print $3}')
+PATH="$PWD/$ENV/bin:$PATH" snakemake --cores 4 --forceall --config use_denet=false outdir=results_baseline n_chromosomes=2 chr_length=5000000 n_reads=1500000 dup_fraction=0.2
+PATH="$PWD/$ENV/bin:$PATH" snakemake --cores 4 --forceall --config use_denet=true outdir=results_denet n_chromosomes=2 chr_length=5000000 n_reads=1500000 dup_fraction=0.2
 ```
 
 ## Running locally
