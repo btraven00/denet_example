@@ -70,38 +70,59 @@ denet_metrics_dir <- "results_denet/denet_metrics"
 
 denet_files <- list.files(denet_metrics_dir, pattern = "\\.jsonl$", full.names = TRUE)
 
-denet_ts <- lapply(denet_files, function(f) {
-  step <- str_remove(basename(f), "\\.jsonl$")
-  # metadata lines start with {"pid":...; sample lines start with {"ts_ms":...
-  # (samples also contain "pid" inside children[], so match on line prefix)
-  lines <- readLines(f)
-  meta_idx <- which(grepl('^\\{"pid":', lines))
-  run_list <- lapply(seq_along(meta_idx), function(i) {
+# denet >= 0.8 tags every JSONL record with a "kind" discriminator
+# (env | metadata | tree); older releases emitted untagged records where
+# metadata began with {"pid": and samples with {"ts_ms":. Detect which layout a
+# file uses and accept both, so runs recorded with either version still load.
+# In both layouts the tree-level aggregate lives under $aggregated.
+read_denet_jsonl <- function(f) {
+  lines <- readLines(f, warn = FALSE)
+  lines <- lines[nzchar(lines)]
+  if (length(lines) == 0) return(NULL)
+
+  tagged <- any(str_detect(lines, '^\\{"kind"'))
+  if (tagged) {
+    is_meta   <- str_detect(lines, '"kind"\\s*:\\s*"metadata"')
+    is_sample <- str_detect(lines, '"kind"\\s*:\\s*"tree"')
+  } else {
+    is_meta   <- str_detect(lines, '^\\{"pid":')
+    is_sample <- str_detect(lines, '^\\{"ts_ms":')
+  }
+
+  # Each benchmark repeat appends a metadata record followed by its samples.
+  meta_idx <- which(is_meta)
+  if (length(meta_idx) == 0) meta_idx <- 0L
+
+  bind_rows(lapply(seq_along(meta_idx), function(i) {
     start <- meta_idx[i] + 1
     end   <- if (i < length(meta_idx)) meta_idx[i + 1] - 1 else length(lines)
-    block <- lines[start:end]
-    block <- block[nzchar(block) & grepl('^\\{"ts_ms":', block)]
+    if (start > end) return(NULL)
+    block <- lines[start:end][is_sample[start:end]]
     if (length(block) == 0) return(NULL)
-    parsed <- lapply(block, function(l) {
-      obj <- fromJSON(l)
-      agg <- obj$aggregated
+    df <- bind_rows(lapply(block, function(l) {
+      agg <- fromJSON(l)$aggregated
       data.frame(
-        ts_ms = as.numeric(agg$ts_ms),
-        cpu_usage = as.numeric(agg$cpu_usage),
-        mem_rss_mb = as.numeric(agg$mem_rss_kb) / 1024,
+        ts_ms         = as.numeric(agg$ts_ms),
+        cpu_usage     = as.numeric(agg$cpu_usage),
+        mem_rss_mb    = as.numeric(agg$mem_rss_kb) / 1024,
         disk_write_mb = as.numeric(agg$disk_write_bytes) / 1024^2
       )
-    })
-    df <- bind_rows(parsed) |> arrange(ts_ms)
+    })) |> arrange(ts_ms)
     df$time_s <- (df$ts_ms - df$ts_ms[1]) / 1000
     df$repeat_id <- i
     df
-  })
-  df <- bind_rows(run_list)
-  df$step <- step
+  }))
+}
+
+denet_ts <- lapply(denet_files, function(f) {
+  df <- read_denet_jsonl(f)
+  if (is.null(df) || nrow(df) == 0) return(NULL)
+  df$step <- str_remove(basename(f), "\\.jsonl$")
   df
 }) |> bind_rows() |>
   mutate(step_label = factor(step_labels[step], levels = step_labels))
+
+stopifnot(nrow(denet_ts) > 0)
 ```
 
 ```{r fig-wall-time}
