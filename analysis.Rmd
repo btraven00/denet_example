@@ -291,7 +291,7 @@ markdup_dirs <- c(sort = "results_markdup_sort", collate_fast = "results_markdup
 have_markdup <- all(dir.exists(markdup_dirs))
 ```
 
-```{r markdup-perprocess, eval=have_markdup, fig.height=10, fig.cap="Duplicate marking at 30x, per process, for one repeat of each variant (wrap mode). All axes linear. Top: resident memory (GB) stacked by process (processes under 100 MB are listed, as they do not show at this scale). Middle: cumulative disk writes (GB) stacked by process (temporary spill files of the sorts, and markdup's output). Bottom: CPU per process (100% = one core), one lane per pipeline position. Dashed lines are events logged by the pipeline itself (markdup_phase_log), on the same clock as denet's samples: a sort starting to merge its temporary spill files, and the mate-grouping stage exiting. Processes are labelled by pipeline position (PID order, checked against /proc during the run)."}
+```{r markdup-perprocess, eval=have_markdup, fig.height=9.5, fig.cap="Duplicate marking at 30x, per process, for one repeat of each variant (wrap mode). All axes linear. Top: resident memory (GB) stacked by process (processes under 100 MB are listed, as they do not show at this scale). Middle: cumulative disk writes (GB) stacked by process (temporary spill files of the sorts, and markdup's output). Bottom: CPU per process (100% = one core), one lane per pipeline position. Dashed lines are events logged by the pipeline itself (markdup_phase_log), on the same clock as denet's samples: a sort starting to merge its temporary spill files, and the mate-grouping stage exiting. Processes are labelled by pipeline position (PID order, checked against /proc during the run)."}
 stage_names <- list(sort = c("sort -n", "fixmate", "sort", "markdup"),
                     collate_fast = c("collate -f", "fixmate", "sort", "markdup"))
 variant_labels <- c(sort = "samtools sort -n | fixmate | sort | markdup",
@@ -419,8 +419,8 @@ p_md_cpu <- ggplot(md, aes(time_s, cpu, colour = stage)) +
   theme(strip.placement = "outside", strip.text.y.left = element_text(angle = 0, size = 9),
         strip.text.x = element_blank())
 
-fig_md <- (p_md_mem / p_md_io / p_md_cpu) + plot_layout(guides = "collect", heights = c(2, 1.5, 3))
-ggsave("figures/markdup_perprocess.pdf", fig_md, width = 12, height = 10)
+fig_md <- (p_md_mem / p_md_io / p_md_cpu) + plot_layout(guides = "collect", heights = c(2, 1, 3))
+ggsave("figures/markdup_perprocess.pdf", fig_md, width = 12, height = 9.5)
 fig_md
 ```
 
