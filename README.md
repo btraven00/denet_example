@@ -74,6 +74,14 @@ make figures       # renders analysis.Rmd to figures/analysis.html and figures/d
 - `figures/analysis.html`: interactive HTML report
 - `figures/denet_benchmark.pdf`: figure for the paper
 
+## Validation
+
+`validation/` holds the scripts that check the benchmark numbers against ground
+truth: CPU and disk writes against kernel accounting and GNU time, per-process
+writes against file sizes, short memory spikes against a known allocation, and
+behaviour under many concurrent jobs. They explain why Snakemake's psutil-based
+`benchmark:` numbers and denet's differ. See `validation/README.md`.
+
 ## CI/CD
 
 The workflow in `.github/workflows/tests.yml` runs on every push to `master` and on pull requests. It has five jobs:
