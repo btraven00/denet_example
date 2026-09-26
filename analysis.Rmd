@@ -292,6 +292,109 @@ p_io <- ggplot(denet_ts,
         panel.grid = element_blank())
 ```
 
+```{r load-markdup-variants}
+# markdup re-run per mate-grouping variant (wrap mode, markdup_phase_log=true;
+# `make markdup-variants`). Optional: the chunk and figure are skipped when the
+# directories are absent (e.g. in CI).
+markdup_dirs <- c(sort = "results_markdup_sort", collate_fast = "results_markdup_collate_fast")
+have_markdup <- all(dir.exists(markdup_dirs))
+```
+
+```{r markdup-perprocess, eval=have_markdup, fig.height=6, fig.cap="Duplicate marking at 30x, per process, for one repeat of each variant (wrap mode). Top: resident memory stacked by process. Bottom: CPU per process. Dashed lines are events logged by the pipeline itself (markdup_phase_log), on the same clock as denet's samples: a sort starting to merge its temporary spill files, and the mate-grouping stage exiting. Processes are labelled by pipeline position (PID order, checked against /proc during the run)."}
+stage_names <- list(sort = c("sort -n", "fixmate", "sort", "markdup"),
+                    collate_fast = c("collate -f", "fixmate", "sort", "markdup"))
+variant_labels <- c(sort = "samtools sort -n | fixmate | sort | markdup",
+                    collate_fast = "samtools collate -f | fixmate | sort | markdup")
+
+read_children <- function(f) {
+  lines <- readLines(f, warn = FALSE)
+  lines <- lines[str_detect(lines, '"kind"\\s*:\\s*"tree"')]
+  bind_rows(lapply(lines, function(l) {
+    rec <- fromJSON(l)
+    ch <- rec$children
+    if (is.null(ch) || length(ch) == 0) return(NULL)
+    data.frame(ts_ms = rec$ts_ms, pid = ch$pid, command = ch$command,
+               rss_gb = ch$metrics$mem_rss_kb / 1024^2,
+               cpu = ch$metrics$cpu_usage)
+  }))
+}
+
+md <- bind_rows(lapply(names(markdup_dirs), function(v) {
+  f <- sort(list.files(file.path(markdup_dirs[[v]], "denet_metrics"),
+                       pattern = "^markdup\\..*\\.jsonl$", full.names = TRUE))[1]
+  df <- read_children(f) |> filter(command == "samtools")
+  pids <- sort(unique(df$pid))[1:4]
+  t0 <- min(df$ts_ms)
+  df |>
+    filter(pid %in% pids) |>
+    mutate(variant = v, t0 = t0, t1 = max(ts_ms),
+           stage = stage_names[[v]][match(pid, pids)],
+           time_s = (ts_ms - t0) / 1000)
+}))
+
+events <- bind_rows(lapply(names(markdup_dirs), function(v) {
+  ph <- read.delim(file.path(markdup_dirs[[v]], "logs", "markdup.phases.tsv"),
+                   header = FALSE, col.names = c("ts_ms", "what", "detail"),
+                   quote = "", colClasses = c("numeric", "character", "character"))
+  win <- md |> filter(variant == v) |> slice(1)
+  ph |>
+    filter(ts_ms >= win$t0 - 1000, ts_ms <= win$t1 + 1000) |>
+    mutate(label = case_when(
+      str_detect(detail, "merging from") & what == "group" ~ paste(stage_names[[v]][1], "merges spills"),
+      str_detect(detail, "merging from") & what == "sort" ~ "sort merges spills",
+      what == "end" & detail == "group" ~ paste(stage_names[[v]][1], "exits"),
+      TRUE ~ NA_character_)) |>
+    filter(!is.na(label)) |>
+    mutate(variant = v, time_s = (ts_ms - win$t0) / 1000) |>
+    # events within a second of each other (e.g. the name sort exiting and the
+    # coordinate sort starting its merge) share one marker and one label
+    arrange(time_s) |>
+    mutate(grp = cumsum(c(TRUE, diff(time_s) > 1))) |>
+    group_by(variant, grp) |>
+    summarise(time_s = min(time_s), label = paste(label, collapse = " / "), .groups = "drop")
+}))
+
+md <- md |> mutate(stage = factor(stage, levels = unique(unlist(stage_names))[c(1, 5, 2, 3, 4)]),
+                   variant = factor(variant_labels[variant], levels = variant_labels))
+events <- events |> mutate(variant = factor(variant_labels[variant], levels = variant_labels))
+stage_cols <- c("sort -n" = "#C44E52", "collate -f" = "#8172B2", "fixmate" = "#55A868",
+                "sort" = "#4C72B0", "markdup" = "#DD8452")
+
+# stacking needs every process at every sample time
+md_stack <- md |>
+  select(variant, time_s, stage, rss_gb) |>
+  complete(nesting(variant, time_s), stage, fill = list(rss_gb = 0)) |>
+  filter(!is.na(stage))
+
+peaks <- md_stack |> group_by(variant, time_s) |> summarise(tot = sum(rss_gb), .groups = "drop") |>
+  group_by(variant) |> summarise(peak = max(tot), dur = max(time_s), .groups = "drop") |>
+  mutate(txt = sprintf("peak %.2f GB, %.0f s", peak, dur))
+
+p_md_mem <- ggplot(md_stack, aes(time_s, rss_gb, fill = stage)) +
+  geom_area(position = "stack", alpha = 0.9) +
+  geom_vline(data = events, aes(xintercept = time_s), linetype = "dashed", linewidth = 0.3) +
+  geom_text(data = events, aes(x = time_s, y = Inf, label = label), inherit.aes = FALSE,
+            angle = 90, hjust = 1.05, vjust = -0.4, size = 3) +
+  geom_text(data = peaks, aes(x = Inf, y = Inf, label = txt), inherit.aes = FALSE,
+            hjust = 1.05, vjust = 1.5, size = 3.5) +
+  facet_wrap(~variant, nrow = 1) +
+  scale_fill_manual(values = stage_cols, drop = TRUE) +
+  labs(x = NULL, y = "RSS (GB, linear), stacked per process", fill = "process") +
+  theme_bw(base_size = 12)
+
+p_md_cpu <- ggplot(md, aes(time_s, cpu, colour = stage)) +
+  geom_line(linewidth = 0.4) +
+  geom_vline(data = events, aes(xintercept = time_s), linetype = "dashed", linewidth = 0.3) +
+  facet_wrap(~variant, nrow = 1) +
+  scale_colour_manual(values = stage_cols, drop = TRUE, guide = "none") +
+  labs(x = "Elapsed time (s)", y = "CPU (%, linear; 100% = one core)", colour = NULL) +
+  theme_bw(base_size = 12)
+
+fig_md <- (p_md_mem / p_md_cpu) + plot_layout(guides = "collect", heights = c(3, 2))
+ggsave("figures/markdup_perprocess.pdf", fig_md, width = 12, height = 6)
+fig_md
+```
+
 ```{r combined-figure, fig.cap="Resource profiling of a simulated read alignment workflow. (A, B, C) Mean wall-clock time, peak RSS, and disk bytes written per pipeline step under two conditions: Snakemake (baseline, no denet) and Snakemake + denet wrap (denet attached to each rule subprocess via a shell wrapper). Error bars are +/- 1 SD across benchmark repeats. SD was chosen over SE or CV to express absolute run-to-run variability in interpretable units. (D, E, F) CPU, RSS, and cumulative disk-write timeseries recorded by denet at 50 ms intervals for the wrap condition, faceted by rule in pipeline order. Elapsed time is relative to the start of each repeat."}
 fig <- (p_time | p_rss | p_io_bar) / (p_cpu | p_mem | p_io) +
   plot_layout(guides = "collect") &
