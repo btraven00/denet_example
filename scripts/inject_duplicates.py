@@ -11,6 +11,7 @@ import argparse
 import gzip
 import os
 import random
+import re
 import sys
 
 
@@ -27,6 +28,15 @@ def iter_fastq(fh):
         yield header, seq, plus, qual
 
 
+def dup_name(header, k):
+    """Read name for the k-th copy, keeping the mate suffix last: aligners and
+    samtools pair mates by stripping a trailing /1 or /2, so "name/1_dup1" and
+    "name/2_dup1" would not be recognised as mates ("name_dup1/1" and
+    "name_dup1/2" are)."""
+    m = re.match(r"(.*?)(/[12])?$", header.rstrip("\n"))
+    return f"{m.group(1)}_dup{k}{m.group(2) or ''}"
+
+
 def append_duplicates(path, indices_to_copies, tmp_path):
     with gzip.open(path, "rt") as src, gzip.open(tmp_path, "wt") as dst:
         for idx, rec in enumerate(iter_fastq(src)):
@@ -34,9 +44,8 @@ def append_duplicates(path, indices_to_copies, tmp_path):
             n_copies = indices_to_copies.get(idx, 0)
             if n_copies:
                 header, seq, plus, qual = rec
-                base_name = header.rstrip("\n")
                 for k in range(1, n_copies + 1):
-                    dst.write(f"{base_name}_dup{k}\n{seq}{plus}{qual}")
+                    dst.write(f"{dup_name(header, k)}\n{seq}{plus}{qual}")
     os.replace(tmp_path, path)
 
 
