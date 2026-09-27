@@ -54,10 +54,14 @@ read_benchmarks <- function(outdir, condition) {
 
 baseline     <- read_benchmarks("results_baseline",    "Snakemake")
 denet_wrap   <- read_benchmarks("results_denet",        "Snakemake + denet wrap")
+# native mode (`make denet-native`): the benchmark TSVs are filled by denet
+# instead of psutil; optional, so the report renders without it
+have_native  <- dir.exists("results_denet_native")
+denet_native <- if (have_native) read_benchmarks("results_denet_native", "Snakemake + denet native")
 
-condition_levels <- c("Snakemake", "Snakemake + denet wrap")
+condition_levels <- c("Snakemake", "Snakemake + denet wrap", "Snakemake + denet native")[c(TRUE, TRUE, have_native)]
 
-bench <- bind_rows(baseline, denet_wrap) |>
+bench <- bind_rows(baseline, denet_wrap, denet_native) |>
   mutate(
     step_label = factor(step_labels[step], levels = step_labels),
     condition  = factor(condition, levels = condition_levels)
@@ -161,7 +165,8 @@ p_time <- ggplot(bench_summary,
                      minor_breaks = c(0.5, 2, 5, 20, 50),
                      labels = label_number(accuracy = 0.1)) +
   scale_fill_manual(values = c("Snakemake" = "#4C72B0",
-                               "Snakemake + denet wrap" = "#DD8452")) +
+                               "Snakemake + denet wrap" = "#DD8452",
+                               "Snakemake + denet native" = "#55A868")) +
   labs(x = NULL, y = "Wall-clock time (s, log1p scale)", fill = NULL,
        title = "A  Wall-clock time per step",
        subtitle = paste0("mean +/- 1 SD, n = ", n_repeats, " repeats")) +
@@ -190,7 +195,8 @@ p_rss <- ggplot(rss_summary,
                      minor_breaks = c(3, 50, 200, 500, 2000),
                      labels = label_number(accuracy = 1)) +
   scale_fill_manual(values = c("Snakemake" = "#4C72B0",
-                               "Snakemake + denet wrap" = "#DD8452")) +
+                               "Snakemake + denet wrap" = "#DD8452",
+                               "Snakemake + denet native" = "#55A868")) +
   labs(x = NULL, y = "Peak RSS (MB, log1p scale)", fill = NULL,
        title = "B  Peak resident memory per step",
        subtitle = paste0("mean +/- 1 SD, n = ", n_repeats, " repeats")) +
@@ -219,7 +225,8 @@ p_io_bar <- ggplot(io_summary,
                      minor_breaks = c(3, 50, 200, 500, 2000),
                      labels = label_number(accuracy = 1)) +
   scale_fill_manual(values = c("Snakemake" = "#4C72B0",
-                               "Snakemake + denet wrap" = "#DD8452")) +
+                               "Snakemake + denet wrap" = "#DD8452",
+                               "Snakemake + denet native" = "#55A868")) +
   labs(x = NULL, y = "Disk write (MB, log1p scale)", fill = NULL,
        title = "C  Disk write per step",
        subtitle = paste0("mean +/- 1 SD, n = ", n_repeats, " repeats")) +
@@ -445,7 +452,7 @@ ggsave("figures/markdup_perprocess.pdf", fig_md, width = 12, height = 9.5)
 fig_md
 ```
 
-```{r combined-figure, fig.height=12, fig.cap="Resource profiling of a simulated read alignment workflow. (A, B, C) Mean wall-clock time, peak RSS, and disk bytes written per pipeline step under two conditions: Snakemake (baseline, no denet) and Snakemake + denet wrap (denet attached to each rule subprocess via a shell wrapper). Error bars are +/- 1 SD across benchmark repeats. SD was chosen over SE or CV to express absolute run-to-run variability in interpretable units. (D, E, F) CPU, RSS, and cumulative disk-write timeseries recorded by denet at 50 ms intervals for the wrap condition, faceted by rule in pipeline order, one line per repeat; each rule has its own linear y range (CPU: 100% = one core; disk writes cumulative). Elapsed time is relative to the start of each repeat. Faidx genome finishes before the first sample."}
+```{r combined-figure, fig.height=12, fig.cap="Resource profiling of a simulated read alignment workflow. (A, B, C) Mean wall-clock time, peak RSS, and disk bytes written per pipeline step under three conditions: Snakemake (baseline, no denet), Snakemake + denet wrap (denet attached to each rule subprocess via a shell wrapper; the bars are still Snakemake's psutil measurements), and Snakemake + denet native (denet replaces Snakemake's psutil sampler, so the bars are denet's measurements; rules unchanged). Error bars are +/- 1 SD across benchmark repeats. SD was chosen over SE or CV to express absolute run-to-run variability in interpretable units. (D, E, F) CPU, RSS, and cumulative disk-write timeseries recorded by denet at 50 ms intervals for the wrap condition, faceted by rule in pipeline order, one line per repeat; each rule has its own linear y range (CPU: 100% = one core; disk writes cumulative). Elapsed time is relative to the start of each repeat. Faidx genome finishes before the first sample."}
 fig <- (p_time | p_rss | p_io_bar) / p_cpu / p_mem / p_io +
   plot_layout(guides = "collect", heights = c(3, 2, 2, 2)) &
   theme(legend.position = "bottom",
