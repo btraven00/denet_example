@@ -291,11 +291,29 @@ markdup_dirs <- c(sort = "results_markdup_sort", collate_fast = "results_markdup
 have_markdup <- all(dir.exists(markdup_dirs))
 ```
 
-```{r markdup-perprocess, eval=have_markdup, fig.height=9.5, fig.cap="Duplicate marking at 30x, per process, for one repeat of each variant (wrap mode). All axes linear. Top: resident memory (GB) stacked by process (processes under 100 MB are listed, as they do not show at this scale). Middle: cumulative disk writes (GB) stacked by process (temporary spill files of the sorts, and markdup's output). Bottom: CPU per process (100% = one core), one lane per pipeline position. Dashed lines are events logged by the pipeline itself (markdup_phase_log), on the same clock as denet's samples: a sort starting to merge its temporary spill files, and the mate-grouping stage exiting. Processes are labelled by pipeline position (PID order, checked against /proc during the run)."}
+```{r markdup-perprocess, eval=have_markdup, fig.height=9.5, fig.cap="Duplicate marking at 30x, per process, for one repeat of each variant (wrap mode). All axes linear. Top: resident memory (GB) stacked by process (processes under 100 MB are listed, as they do not show at this scale). Middle: cumulative disk writes (GB) stacked by process (temporary spill files of the sorts, and markdup's output). Bottom: CPU per process (100% = one core), one lane per pipeline position. Dashed lines are events logged by the pipeline itself (markdup_phase_log), on the same clock as denet's samples: a sort starting to merge its temporary spill files, and the mate-grouping stage exiting. Processes are named from denet's per-child command-line records (denet >= 0.10)."}
 stage_names <- list(sort = c("sort -n", "fixmate", "sort", "markdup"),
                     collate_fast = c("collate -f", "fixmate", "sort", "markdup"))
 variant_labels <- c(sort = "samtools sort -n | fixmate | sort | markdup",
                     collate_fast = "samtools collate -f | fixmate | sort | markdup")
+
+# denet >= 0.10 writes a `child` record with each child's full command line;
+# name samtools processes by subcommand from it
+child_stages <- function(f) {
+  lines <- readLines(f, warn = FALSE)
+  lines <- lines[str_detect(lines, '"kind"\\s*:\\s*"child"')]
+  if (length(lines) == 0) return(NULL)
+  bind_rows(lapply(lines, function(l) {
+    rec <- fromJSON(l)
+    cmd <- rec$cmd
+    if (length(cmd) < 2 || !str_detect(cmd[1], "samtools$")) return(NULL)
+    stage <- switch(cmd[2],
+                    sort = if ("-n" %in% cmd) "sort -n" else "sort",
+                    collate = if ("-f" %in% cmd) "collate -f" else "collate",
+                    fixmate = "fixmate", markdup = "markdup", NA_character_)
+    data.frame(pid = rec$pid, stage = stage)
+  })) |> filter(!is.na(stage)) |> distinct(pid, .keep_all = TRUE)
+}
 
 read_children <- function(f) {
   lines <- readLines(f, warn = FALSE)
@@ -315,13 +333,16 @@ md <- bind_rows(lapply(names(markdup_dirs), function(v) {
   f <- sort(list.files(file.path(markdup_dirs[[v]], "denet_metrics"),
                        pattern = "^markdup\\..*\\.jsonl$", full.names = TRUE))[1]
   df <- read_children(f) |> filter(command == "samtools")
-  pids <- sort(unique(df$pid))[1:4]
   t0 <- min(df$ts_ms)
-  df |>
-    filter(pid %in% pids) |>
-    mutate(variant = v, t0 = t0, t1 = max(ts_ms),
-           stage = stage_names[[v]][match(pid, pids)],
-           time_s = (ts_ms - t0) / 1000)
+  named <- child_stages(f)
+  if (!is.null(named) && nrow(named) >= 4) {
+    df <- df |> inner_join(named, by = "pid")
+  } else {
+    # older denet: label by pipeline position (PID order)
+    pids <- sort(unique(df$pid))[1:4]
+    df <- df |> filter(pid %in% pids) |> mutate(stage = stage_names[[v]][match(pid, pids)])
+  }
+  df |> mutate(variant = v, t0 = t0, t1 = max(ts_ms), time_s = (ts_ms - t0) / 1000)
 }))
 
 events <- bind_rows(lapply(names(markdup_dirs), function(v) {
