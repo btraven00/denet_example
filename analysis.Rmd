@@ -432,7 +432,7 @@ p_md_io <- ggplot(md_write, aes(time_s, write_gb, fill = stage)) +
             hjust = 1.05, vjust = 1.5, size = 3.5) +
   facet_wrap(~variant, nrow = 1) +
   scale_fill_manual(values = stage_cols, drop = TRUE, guide = "none") +
-  labs(x = NULL, y = "Written (GB)") +
+  labs(x = NULL, y = "Disk writes (GB)") +
   theme_bw(base_size = 12) +
   theme(strip.text.x = element_blank())
 
@@ -452,7 +452,7 @@ ggsave("figures/markdup_perprocess.pdf", fig_md, width = 12, height = 9.5)
 fig_md
 ```
 
-```{r figure-1, eval=have_markdup, fig.height=9.5, fig.cap="Figure 1. The cost and the value of per-process profiling. (A) Cost: difference from baseline (Snakemake's own benchmark, no denet) in wall-clock time (%) and peak resident memory (MB), per rule, for denet in wrap mode (a monitor process per job) and native mode (denet replaces Snakemake's psutil sampler), mean of 3 repeats; baseline runtime in brackets. Short rules pay a fixed ~0.3-0.5 s per job. In native mode denet is not part of the job's process tree, so its peak-RSS differences reflect sampling resolution (it catches brief peaks that psutil's 0.5 s/30 s schedule misses), not cost. Faidx genome (0.2 s) is omitted, where any fixed cost dominates in percent. (B-D) Value: the duplicate-marking rule, per process, for one repeat of the current pipeline and of the collate -f variant, as recorded by denet: resident memory (B) and cumulative disk writes (C) stacked by process, and CPU per process (D). Dashed lines are events logged by the pipeline itself on the same clock. All axes linear."}
+```{r figure-1, eval=have_markdup, fig.height=9.5, fig.cap="Figure 1. The value and the cost of per-process profiling. (D) Cost: difference from baseline (Snakemake's own benchmark, no denet) in wall-clock time (%) and peak resident memory (MB), per rule, for denet in wrap mode (a monitor process per job) and native mode (denet replaces Snakemake's psutil sampler), mean of 3 repeats; baseline runtime in brackets. Short rules pay a fixed ~0.3-0.5 s per job. In native mode denet is not part of the job's process tree, so its peak-RSS differences reflect sampling resolution (it catches brief peaks that psutil's 0.5 s/30 s schedule misses), not cost. Faidx genome (0.2 s) is omitted, where any fixed cost dominates in percent. (A-C) Value: the duplicate-marking rule, per process, for one repeat of the current pipeline and of the collate -f variant, as recorded by denet: resident memory (A) and cumulative disk writes (B) stacked by process, and CPU per process (C). Dashed lines are events logged by the pipeline itself on the same clock. All axes linear."}
 cost <- bench |>
   filter(step != "faidx_genome") |>
   group_by(step, step_label, condition) |>
@@ -477,16 +477,16 @@ p_cost <- ggplot(cost_d, aes(delta, rule, colour = mode, shape = mode)) +
   facet_wrap(~metric, ncol = 1, scales = "free_x") +
   scale_colour_manual(values = c(wrap = "grey55", native = "black"), name = "denet mode") +
   scale_shape_manual(values = c(wrap = 1, native = 16), name = "denet mode") +
-  labs(x = "Difference from baseline (linear)", y = NULL, title = "A  Cost") +
+  labs(x = "Difference from baseline (linear)", y = NULL) +
   theme_bw(base_size = 11) +
   theme(legend.position = "bottom")
 
-fig1 <- p_cost |
-  ((p_md_mem + labs(title = "B  Memory per process (markdup)")) /
-   (p_md_io + labs(title = "C  Disk written per process")) /
-   (p_md_cpu + labs(title = "D  CPU per process")) +
-   plot_layout(heights = c(2, 1, 3)))
-fig1 <- fig1 + plot_layout(widths = c(1, 2.6), guides = "collect")
+fig1 <- ((p_md_mem + labs(title = "A  Memory per process (markdup)")) /
+         (p_md_io + labs(title = "B  Disk writes per process")) /
+         (p_md_cpu + labs(title = "C  CPU per process")) +
+         plot_layout(heights = c(2, 1, 3))) |
+  (p_cost + labs(title = "D  Cost"))
+fig1 <- fig1 + plot_layout(widths = c(2.6, 1), guides = "collect")
 ggsave("figures/figure1.pdf", fig1, width = 15, height = 9.5)
 fig1
 ```
