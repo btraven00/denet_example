@@ -70,18 +70,28 @@ _all_steps = [
 # the whole input in memory while the downstream coordinate sort fills its own
 # buffer. "collate" only brings mates together (temp files, small memory);
 # "collate_fast" keeps a small in-memory window and needs one alignment per read.
+# "none" skips grouping: the aligner's output is already grouped by read name
+# (bowtie2 writes GO:query), which is all fixmate needs.
 _markdup_group = {
     "sort": "samtools sort -n -@ {threads} {input.bam}",
     "collate": f"samtools collate -O -u -@ {{threads}} -T {outdir}/results/markdup_collate {{input.bam}}",
     "collate_fast": "samtools collate -O -u -f -@ {threads} {input.bam}",
+    "none": None,
 }[config.get("markdup_group", "sort")]
 
+# coordinate sort inside markdup: threads (default: the rule's) and memory per
+# thread (default: samtools' 768M); more of either shortens or avoids spills
+_sort_threads = config.get("markdup_sort_threads", "{threads}")
+_sort_mem = f" -m {config['markdup_sort_mem']}" if "markdup_sort_mem" in config else ""
+
 _markdup_stages = [
-    ("group", _markdup_group),
-    ("fixmate", "samtools fixmate -m -@ {threads} - -"),
-    ("sort", "samtools sort -@ {threads} -"),
+    ("fixmate", "samtools fixmate -m -@ {threads} {input.bam} -"),
+    ("sort", f"samtools sort -@ {_sort_threads}{_sort_mem} -"),
     ("markdup", "samtools markdup -@ {threads} - {output.bam}"),
 ]
+if _markdup_group:
+    _markdup_stages[0] = ("fixmate", "samtools fixmate -m -@ {threads} - -")
+    _markdup_stages.insert(0, ("group", _markdup_group))
 
 # markdup_phase_log: each pipe stage appends epoch-ms start/end lines and its
 # timestamped stderr (e.g. samtools' spill-merge messages) to params.phases, so
