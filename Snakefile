@@ -48,8 +48,10 @@ onstart:
         shutil.rmtree(f"{outdir}/denet_metrics", ignore_errors=True)
     if use_denet_native:
         shutil.rmtree(f"{outdir}/denet_native", ignore_errors=True)
-    if markdup_phase_log and os.path.exists(f"{outdir}/logs/markdup.phases.tsv"):
-        os.remove(f"{outdir}/logs/markdup.phases.tsv")
+    if markdup_phase_log:
+        for name in ("markdup", "align_markdup"):
+            if os.path.exists(f"{outdir}/logs/{name}.phases.tsv"):
+                os.remove(f"{outdir}/logs/{name}.phases.tsv")
 
 
 _all_steps = [
@@ -84,37 +86,64 @@ _markdup_group = {
 _sort_threads = config.get("markdup_sort_threads", "{threads}")
 _sort_mem = f" -m {config['markdup_sort_mem']}" if "markdup_sort_mem" in config else ""
 
+def _flag(key):
+    v = config.get(key, False)
+    return v if isinstance(v, bool) else str(v).lower() in ("true", "1", "yes")
+
+
+# markdup_uncompressed_pipes: pass uncompressed BAM between the pipe stages;
+# otherwise each stage compresses what the next one immediately decompresses
+_u = " -u" if _flag("markdup_uncompressed_pipes") else ""
+
 _markdup_stages = [
-    ("fixmate", "samtools fixmate -m -@ {threads} {input.bam} -"),
-    ("sort", f"samtools sort -@ {_sort_threads}{_sort_mem} -"),
+    ("fixmate", f"samtools fixmate -m{_u} -@ {{threads}} {{input.bam}} -"),
+    ("sort", f"samtools sort{_u} -@ {_sort_threads}{_sort_mem} -"),
     ("markdup", "samtools markdup -@ {threads} - {output.bam}"),
 ]
 if _markdup_group:
-    _markdup_stages[0] = ("fixmate", "samtools fixmate -m -@ {threads} - -")
+    _markdup_stages[0] = ("fixmate", f"samtools fixmate -m{_u} -@ {{threads}} - -")
     _markdup_stages.insert(0, ("group", _markdup_group))
 
 # markdup_phase_log: each pipe stage appends epoch-ms start/end lines and its
 # timestamped stderr (e.g. samtools' spill-merge messages) to params.phases, so
 # the phases can be aligned with denet's ts_ms. Off by default: it adds a bash
 # function and a date call per stderr line to the measured rule.
-_ph_raw = config.get("markdup_phase_log", False)
-markdup_phase_log = _ph_raw if isinstance(_ph_raw, bool) else str(_ph_raw).lower() in ("true", "1", "yes")
+markdup_phase_log = _flag("markdup_phase_log")
 
-if markdup_phase_log:
-    _markdup_cmd = (
+
+def _pipe_cmd(stages):
+    if not markdup_phase_log:
+        return "( " + " | ".join(c for _, c in stages) + " ) 2> {log}"
+    return (
         "ph() {{ local n=$1 rc; shift; "
         "printf '%s\\tstart\\t%s\\n' \"$(date +%s%3N)\" \"$n\" >> {params.phases}; "
         "\"$@\" 2> >(while IFS= read -r l; do printf '%s\\t%s\\t%s\\n' \"$(date +%s%3N)\" \"$n\" \"$l\"; done >> {params.phases}) && rc=0 || rc=$?; "
         "printf '%s\\tend\\t%s\\n' \"$(date +%s%3N)\" \"$n\" >> {params.phases}; return $rc; }}; "
-        + "( " + " | ".join(f"ph {n} {c}" for n, c in _markdup_stages) + " ) 2> {log}"
+        + "( " + " | ".join(f"ph {n} {c}" for n, c in stages) + " ) 2> {log}"
     )
-else:
-    _markdup_cmd = "( " + " | ".join(c for _, c in _markdup_stages) + " ) 2> {log}"
+
+
+_markdup_cmd = _pipe_cmd(_markdup_stages)
+
+# pipeline_design=fused: one rule from reads to the duplicate-marked BAM,
+# bowtie2 | fixmate -u | sort -u | markdup. No aligned_unsorted.bam written and
+# read back, no grouping step (bowtie2's output is already grouped by read
+# name), and no second coordinate sort (sort_bam, index_bam).
+fused = config.get("pipeline_design", "separate") == "fused"
+_fused_stages = [
+    ("align", "bowtie2 -x {params.idx_prefix} -1 {input.r1} -2 {input.r2} -p {threads}"),
+    ("fixmate", "samtools fixmate -m -u -@ 2 - -"),
+    ("sort", f"samtools sort -u -@ 2{_sort_mem} -"),
+    ("markdup", "samtools markdup -@ 2 - {output.bam}"),
+]
+if fused:
+    _all_steps = [s for s in _all_steps if s not in ("align", "sort_bam", "index_bam", "markdup")]
+    _all_steps.insert(_all_steps.index("index_markdup"), "align_markdup")
 
 
 rule all:
     input:
-        f"{outdir}/results/aligned.bam.bai",
+        [] if fused else f"{outdir}/results/aligned.bam.bai",
         f"{outdir}/results/variants.vcf.gz",
         expand(
             "{outdir}/benchmarks/{step}.tsv",
@@ -286,6 +315,39 @@ rule markdup:
     threads: 2
     shell:
         wrap(_markdup_cmd, "markdup")
+
+
+if fused:
+
+    ruleorder: align_markdup > markdup
+
+    rule align_markdup:
+        input:
+            r1=f"{outdir}/data/reads_1.fq.gz",
+            r2=f"{outdir}/data/reads_2.fq.gz",
+            idx=multiext(
+                f"{outdir}/data/genome",
+                ".1.bt2",
+                ".2.bt2",
+                ".3.bt2",
+                ".4.bt2",
+                ".rev.1.bt2",
+                ".rev.2.bt2",
+            ),
+        output:
+            bam=f"{outdir}/results/aligned.markdup.bam",
+        log:
+            f"{outdir}/logs/align_markdup.log",
+        benchmark:
+            repeat(f"{outdir}/benchmarks/align_markdup.tsv", bench_repeats)
+        conda:
+            "envs/genome_tools.yaml"
+        threads: 4
+        params:
+            idx_prefix=f"{outdir}/data/genome",
+            phases=f"{outdir}/logs/align_markdup.phases.tsv",
+        shell:
+            wrap(_pipe_cmd(_fused_stages), "align_markdup")
 
 
 rule index_markdup:
