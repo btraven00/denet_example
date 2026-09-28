@@ -1,5 +1,5 @@
 # Calibration ladder under Snakemake: a process holds MIB of resident memory for a
-# known time D after a random delay; the known size is the truth. Run with:
+# known time D after a delay (config pre=lo,hi); the known size is the truth. Run with:
 #   snakemake -s validation/calib/Snakefile --cores 4 \
 #     --config outdir=validation_out/ladder compare_out=validation_out/ladder.tsv
 # every job measured at once by Snakemake's
@@ -14,7 +14,11 @@ compare_timer.install(config["compare_out"], config["compare_out"] + ".denet")
 OUT = config["outdir"]
 HOLD = os.path.join(workflow.basedir, "hold_memory.py")
 MIB = int(config.get("mib", 256))
-HOLDS = [0.05, 0.1, 0.25, 0.5, 0.75, 1.0, 2.0]
+HOLDS = [float(h) for h in str(config.get("holds", "0.05,0.1,0.25,0.5,0.75,1.0,2.0")).split(",")]
+# start delay before the spike, drawn per job from [lo, hi] s: a range randomises the
+# spike's phase against the sampler; lo == hi fixes it (every repeat starts the same way);
+# lo > 15 puts the spike in Snakemake's 30 s sampling regime
+PRE_LO, PRE_HI = (float(x) for x in str(config.get("pre", "0.5,3.0")).split(","))
 REPS = range(int(config.get("reps", 8)))
 
 rule all:
@@ -27,5 +31,5 @@ for d in HOLDS:
         benchmark: f"{OUT}/bench/h{d}_r{{r}}.tsv"
         # hold passed as a param: the shell string is formatted at run time, when the
         # loop variable d would already be its last value
-        params: hold=d, pre=lambda w, d=d: round(random.Random(f"{d}-{w.r}").uniform(0.5, 3.0), 3)
+        params: hold=d, pre=lambda w, d=d: round(random.Random(f"{d}-{w.r}").uniform(PRE_LO, PRE_HI), 3)
         shell: f"python3 {HOLD} {MIB} {{params.hold}} {{params.pre}}; touch {{output}}"
