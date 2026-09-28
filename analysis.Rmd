@@ -303,15 +303,15 @@ have_markdup <- all(dir.exists(markdup_dirs[1:2]))
 markdup_dirs <- markdup_dirs[dir.exists(markdup_dirs)]
 ```
 
-```{r markdup-perprocess, eval=have_markdup, fig.height=9.5, fig.cap="Duplicate marking at 30x, per process, for one repeat of each variant (wrap mode). All axes linear. Top: resident memory (GB) stacked by process (processes under 100 MB are listed, as they do not show at this scale). Middle: disk write rate (MB/s) stacked by process (temporary spill files of the sorts, and markdup's output), with the total written. Bottom: CPU per process (100% = one core), one lane per pipeline position. Dashed lines are events logged by the pipeline itself (markdup_phase_log), on the same clock as denet's samples: a sort starting to merge its temporary spill files, and the mate-grouping stage exiting. Processes are named from denet's per-child command-line records (denet >= 0.10)."}
+```{r markdup-perprocess, eval=have_markdup, fig.height=9.5, fig.cap="Duplicate marking at 30x, per process, for one repeat of each variant (wrap mode). All axes linear. Top: resident memory (GB) stacked by process, with each variant's peak and duration in its header; collate -f, fixmate and markdup stay under 15 MB and do not show at this scale. Middle: disk write rate (MB/s) stacked by process (temporary spill files of the sorts, and markdup's output), with the total written. Bottom: CPU per process (100% = one core), one lane per pipeline position. Dashed lines are events logged by the pipeline itself (markdup_phase_log), on the same clock as denet's samples: a sort starting to merge its temporary spill files, and the mate-grouping stage exiting. Processes are named from denet's per-child command-line records (denet >= 0.10)."}
 stage_names <- list(sort = c("sort -n", "fixmate", "sort", "markdup"),
                     collate_fast = c("collate -f", "fixmate", "sort", "markdup"),
                     round2 = c("fixmate", "sort", "markdup"))
 round2_label <- if ("round2" %in% names(markdup_dirs) && file.exists(file.path(markdup_dirs[["round2"]], "LABEL")))
   readLines(file.path(markdup_dirs[["round2"]], "LABEL"), n = 1) else "fixmate | sort | markdup"
-variant_labels <- c(sort = "Current: sort -n | fixmate | sort | markdup",
-                    collate_fast = "Round 1 (memory): collate -f | fixmate | sort | markdup",
-                    round2 = paste("Round 2 (time):", round2_label))[names(markdup_dirs)]
+variant_labels <- c(sort = "Current\nsort -n | fixmate | sort | markdup",
+                    collate_fast = "Round 1 (memory)\ncollate -f | fixmate | sort | markdup",
+                    round2 = paste0("Round 2 (time)\n", round2_label))[names(markdup_dirs)]
 
 # denet >= 0.10 writes a `child` record with each child's full command line;
 # name samtools processes by subcommand from it
@@ -407,24 +407,18 @@ md_write <- md |>
   mutate(write_gb = coalesce(write_gb, 0)) |>
   ungroup()
 
-small <- md |> group_by(variant, stage) |> summarise(peak_mb = max(rss_gb) * 1024, .groups = "drop") |>
-  filter(peak_mb < 100) |> group_by(variant) |>
-  summarise(txt = paste0("too small to see: ", paste(sprintf("%s %.0f MB", stage, peak_mb), collapse = ", ")), .groups = "drop")
-
 peaks <- md_stack |> group_by(variant, time_s) |> summarise(tot = sum(rss_gb), .groups = "drop") |>
   group_by(variant) |> summarise(peak = max(tot), dur = max(time_s), .groups = "drop") |>
   mutate(txt = sprintf("peak %.2f GB, %.0f s", peak, dur))
+# peak and duration go in the column header, clear of the event labels
+strip_lab <- setNames(paste0(peaks$variant, "\n", peaks$txt), as.character(peaks$variant))
 
 p_md_mem <- ggplot(md_stack, aes(time_s, rss_gb, fill = stage)) +
   geom_area(position = "stack", alpha = 0.9) +
   geom_vline(data = events, aes(xintercept = time_s), linetype = "dashed", linewidth = 0.3) +
   geom_text(data = events, aes(x = time_s, y = Inf, label = label), inherit.aes = FALSE,
             angle = 90, hjust = 1.05, vjust = -0.4, size = 3) +
-  geom_text(data = peaks, aes(x = Inf, y = Inf, label = txt), inherit.aes = FALSE,
-            hjust = 1.05, vjust = 1.5, size = 3.5) +
-  geom_text(data = small, aes(x = Inf, y = Inf, label = txt), inherit.aes = FALSE,
-            hjust = 1.02, vjust = 3.4, size = 2.8) +
-  facet_wrap(~variant, nrow = 1) +
+  facet_wrap(~variant, nrow = 1, labeller = as_labeller(strip_lab)) +
   scale_fill_manual(values = stage_cols, drop = TRUE) +
   labs(x = NULL, y = "RSS (GB)", fill = "process") +
   theme_bw(base_size = 12)
@@ -469,42 +463,12 @@ ggsave("figures/markdup_perprocess.pdf", fig_md, width = 12, height = 9.5)
 fig_md
 ```
 
-```{r figure-1, eval=have_markdup, fig.height=9.5, fig.cap="Figure 1. The value and the cost of per-process profiling. (D) Cost: difference from baseline (Snakemake's own benchmark, no denet) in wall-clock time (%) and peak resident memory (MB), per rule, for denet in wrap mode (a monitor process per job) and native mode (denet replaces Snakemake's psutil sampler), mean of 3 repeats; baseline runtime in brackets. Short rules pay a fixed ~0.3-0.5 s per job. In native mode denet is not part of the job's process tree, so its peak-RSS differences reflect sampling resolution (it catches brief peaks that psutil's 0.5 s/30 s schedule misses), not cost. Faidx genome (0.2 s) is omitted, where any fixed cost dominates in percent. (A-C) Value: the duplicate-marking rule, per process, for one repeat of the current pipeline and of the collate -f variant, as recorded by denet: resident memory (A) and disk write rate (B) stacked by process, and CPU per process (C). Dashed lines are events logged by the pipeline itself on the same clock. All axes linear."}
-cost <- bench |>
-  filter(step != "faidx_genome") |>
-  group_by(step, step_label, condition) |>
-  summarise(wall = mean(s), rss = mean(as.numeric(max_rss), na.rm = TRUE), .groups = "drop")
-cost_base <- cost |> filter(condition == "Snakemake") |> select(step, wall0 = wall, rss0 = rss)
-cost_d <- cost |>
-  filter(condition != "Snakemake") |>
-  left_join(cost_base, by = "step") |>
-  mutate(`Wall time (%)` = 100 * (wall - wall0) / wall0,
-         `Peak RSS (MB)` = rss - rss0,
-         mode = str_remove(as.character(condition), "^Snakemake \\+ denet "),
-         rule = paste0(step_label, " (", as.character(signif(wall0, 2)), " s)")) |>
-  pivot_longer(c(`Wall time (%)`, `Peak RSS (MB)`), names_to = "metric", values_to = "delta") |>
-  mutate(metric = factor(metric, levels = c("Wall time (%)", "Peak RSS (MB)")))
-rule_order <- cost_d |> distinct(step_label, rule) |> arrange(step_label) |> pull(rule)
-cost_d <- cost_d |> mutate(rule = factor(rule, levels = rev(rule_order)))
-
-# greys and shapes, so mode colours do not clash with the process colours in B-D
-p_cost <- ggplot(cost_d, aes(delta, rule, colour = mode, shape = mode)) +
-  geom_vline(xintercept = 0, linewidth = 0.4) +
-  geom_point(size = 2.4, position = position_dodge(width = 0.5)) +
-  facet_wrap(~metric, ncol = 1, scales = "free_x") +
-  scale_colour_manual(values = c(wrap = "grey55", native = "black"), name = "denet mode") +
-  scale_shape_manual(values = c(wrap = 1, native = 16), name = "denet mode") +
-  labs(x = "Difference from baseline (linear)", y = NULL) +
-  theme_bw(base_size = 11) +
-  theme(legend.position = "bottom")
-
-fig1 <- ((p_md_mem + labs(title = "A  Memory per process (markdup)")) /
-         (p_md_io + labs(title = "B  Disk writes per process")) /
-         (p_md_cpu + labs(title = "C  CPU per process")) +
-         plot_layout(heights = c(2, 1, 3))) |
-  (p_cost + labs(title = "D  Cost"))
-fig1 <- fig1 + plot_layout(widths = c(2.6, 1), guides = "collect")
-ggsave("figures/figure1.pdf", fig1, width = 15, height = 9.5)
+```{r figure-1, eval=have_markdup, fig.height=9.5, fig.cap="Figure 1. Per-process profiling of the duplicate-marking rule at 30x, for one repeat of the current pipeline and of two rounds of changes, as recorded by denet in wrap mode: resident memory (A; peak and duration in each header; collate -f, fixmate and markdup stay under 15 MB and do not show) and disk write rate (B) stacked by process, and CPU per process (C). Dashed lines are events logged by the pipeline itself on the same clock. All axes linear."}
+fig1 <- (p_md_mem + labs(title = "A  Memory per process (markdup)")) /
+        (p_md_io + labs(title = "B  Disk writes per process")) /
+        (p_md_cpu + labs(title = "C  CPU per process")) +
+        plot_layout(heights = c(2, 1, 3), guides = "collect")
+ggsave("figures/figure1.pdf", fig1, width = 12, height = 9.5)
 fig1
 ```
 
