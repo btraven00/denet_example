@@ -17,6 +17,7 @@ Python package (`pip install denet`) for native mode.
 | `compare_timer.py`, `compare.smk` | Per job: CPU time, disk writes and peak RSS from psutil vs denet | kernel accounting of the job tree; a 10 ms reference sampler |
 | `calib/` | Does a sampler catch a short memory spike? | a known 256 MiB held for a known time |
 | `io_check.sh` | Are per-process disk writes right, including deleted temp files? | file sizes on disk, polled every 50 ms |
+| `truncation/` | Are bytes written just before a process exits counted at all? | a known volume written after a known idle period |
 | `concurrency.smk` | Does the sampler slow down Snakemake when many jobs run at once? | wall time with psutil vs denet native |
 | `failures.smk` | Do failing, killed and `run:` jobs behave the same under denet native? | Snakemake's behaviour with psutil |
 
@@ -77,6 +78,38 @@ validation/io_check.sh results_denet/results/aligned_unsorted.bam 2
 
 Compare with the per-process `disk_write_bytes` in denet's markdup JSONL. From
 denet 0.10, `child` records give each process's full command line.
+
+### `truncation/`: what the last sample misses
+
+Both samplers read cumulative counters and stop when the process exits, so
+whatever is written between the final sample and exit is never counted. These
+scripts make the loss measurable by writing a known volume at a known time.
+
+`late_writer.py` idles, then writes and exits immediately -- the case that
+exposes the truncation. `write_bytes.py` writes a known volume with `fsync`.
+`two_writers.py` runs two sequential writers that each exit before the next
+begins. `slow_sampler.py` reimplements Snakemake's policy (reset the
+accumulator, walk the tree, sum over processes alive at that instant) on its
+real schedule, for comparison against denet at a short interval.
+
+```
+denet -o late.jsonl -i 50 -m 500 -q run \
+  python3 validation/truncation/late_writer.py --idle-s 20 --mib 512 --path /tmp/x.bin
+```
+
+512 MiB written after an idle period, then immediate exit:
+
+| idle before write | Snakemake's schedule | denet at 50 ms | truth |
+|---|---|---|---|
+| 5 s | 0 MB | 170 MB | 512 MB |
+| 20 s | 0 MB | 126 MB | 512 MB |
+| 40 s | 0 MB | 512 MB | 512 MB |
+
+denet recovers 25-100% depending on where its last sample falls. **Both
+samplers truncate; the faster one truncates less.** `two_writers.py` shows the
+bytes are not lost to the child exiting: 374 + 542 MiB, each writer gone before
+the next started, still totalled 916 MB in both, because a reaped child's I/O
+accounting is folded into its parent.
 
 ### `concurrency.smk` and `failures.smk`
 
