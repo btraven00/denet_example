@@ -11,4 +11,4 @@ dependencies:
   - ncurses
   - samtools=1.20
   - bcftools=1.20
-  - denet==0.10.0
+  - denet==0.10.2

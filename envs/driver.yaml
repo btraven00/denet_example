@@ -1,0 +1,11 @@
+# Driver environment: runs Snakemake itself. denet's Python package is needed
+# here, next to snakemake, for native mode (scripts/denet_native.py).
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.12
+  - snakemake=9.27.0
+  - pip
+  - pip:
+      - denet==0.10.2
