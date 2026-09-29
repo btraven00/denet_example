@@ -1,6 +1,7 @@
 configfile: "config.yaml"
 
 import os
+import shlex
 import shutil
 import sys
 
@@ -31,12 +32,12 @@ def wrap(cmd, step):
         # one JSONL per benchmark repeat: denet -o overwrites, and Snakemake doesn't
         # expose the repeat index, so a nanosecond timestamp orders the repeats
         out = f"{outdir}/denet_metrics/{step}.$(date +%s%N).jsonl"
+        # denet runs the command itself (not attach): it samples from the first
+        # instant, reaps the child so the final disk totals are exact, and exits
+        # with the command's status, so a failing rule still fails
         return "\n".join([
             f"mkdir -p {outdir}/denet_metrics",
-            f"( {cmd} ) &",
-            "_denet_pid=$!",
-            f"denet -o {out} -i 50 -m 500 -q attach $_denet_pid || true",
-            "wait $_denet_pid",
+            f"denet -o {out} -i 50 -m 500 -q run -- bash -euo pipefail -c {shlex.quote(cmd)}",
         ])
     return cmd
 

@@ -5,7 +5,7 @@ Runs a simulated short-read alignment workflow with [Snakemake](https://snakemak
 The two conditions are:
 
 - baseline: plain snakemake, no denet
-- denet wrap: denet attaches to each rule's subprocess via a shell wrapper and writes a JSONL timeseries per step
+- denet wrap: each rule's command runs under `denet run`, which writes a JSONL timeseries per step
 
 ## Requirements
 
