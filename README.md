@@ -96,6 +96,9 @@ mpstat -P 48-63,112-127 10 > load_node3.txt &    # load on the pinned CPUs
 numactl --cpunodebind=3 --membind=3 make paper DENET_BIN_DIR=$HOME/denet-0.10.3/target/release
 ```
 
+On a host without `~/miniconda3`, set `CONDA_RUN` (see the top of the
+Makefile) to put the driver env and a `conda` executable on `PATH` instead.
+
 `DENET_BIN_DIR` puts that build ahead of the conda package's `denet` for
 every step. Without it the conda package is used, which has no eBPF. `make
 caps` grants `cap_bpf`, `cap_perfmon` and `cap_dac_read_search` to whichever
