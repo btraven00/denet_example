@@ -10,10 +10,12 @@ for f in sorted(glob.glob(os.path.join(sys.argv[1], "*.jsonl"))):
     mn, mc = int(m.group(1)), int(m.group(2))
     recs = [json.loads(l) for l in open(f) if l.strip()]
     tree = [r for r in recs if r.get("kind") == "tree"]
-    # the four samtools stages start in pipeline order, so by PID: name sort,
-    # fixmate, coordinate sort, markdup
-    pids = sorted({c["pid"] for r in tree for c in r["children"] if c.get("command") == "samtools"})
-    kind = {pids[0]: "name", pids[2]: "coord"}
+    # the sorts, from denet's per-child command lines (denet >= 0.10)
+    kind = {r["pid"]: ("name" if "-n" in r["cmd"] else "coord")
+            for r in recs if r.get("kind") == "child" and r["cmd"][1:2] == ["sort"]}
+    if not kind:  # older traces: the four stages start in pipeline order
+        pids = sorted({c["pid"] for r in tree for c in r["children"] if c.get("command") == "samtools"})
+        kind = {pids[0]: "name", pids[2]: "coord"}
     ser = {"name": [], "coord": []}
     for r in tree:
         got = {"name": 0, "coord": 0}
