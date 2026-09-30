@@ -92,8 +92,7 @@ git clone --branch v0.10.3 https://github.com/btraven00/denet.git ~/denet-0.10.3
 
 make driver-env conda-envs
 make caps DENET_BIN_DIR=$HOME/denet-0.10.3/target/release   # needs sudo
-mpstat -P 48-63,112-127 10 > load_node3.txt &    # load on the pinned CPUs
-numactl --cpunodebind=3 --membind=3 make paper DENET_BIN_DIR=$HOME/denet-0.10.3/target/release
+NUMA_NODE=3 scripts/run_paper.sh DENET_BIN_DIR=$HOME/denet-0.10.3/target/release
 ```
 
 On a host without `~/miniconda3`, set `CONDA_RUN` (see the top of the
@@ -107,6 +106,10 @@ energy counters. Without capabilities those fields are left out and the
 run still completes. `results_idle/denet.txt` records the binary each run
 used: path, version, SHA-256 and capabilities.
 
+`scripts/run_paper.sh` runs `make paper` under `numactl --cpunodebind=3
+--membind=3`. It logs the load on that node's CPUs (`load_node.txt`) and on the
+whole host (`load_host.txt`) every 10 s, and stamps `START` with the time,
+load, node and commit at the start and the exit status at the end.
 `numactl` sets the CPU affinity and memory policy of `make`. Every process it
 starts inherits them, including Snakemake, each rule and denet, so the whole
 run uses one node's cores, L3 caches and local memory. List your host's nodes
@@ -115,15 +118,15 @@ with `numactl --hardware`.
 Pinning does not reserve those CPUs. Other users' processes can still be
 scheduled on them. Keeping them off needs root, e.g. a cgroup cpuset:
 `systemctl set-property --runtime user.slice AllowedCPUs=0-47,64-111`.
-Without a reservation, log the load on the pinned CPUs for the whole run, as
-above, so that contention can be reported rather than assumed away.
+Without a reservation, the load logs let contention be reported rather than
+assumed away.
 
 **Archive.** The measurement outputs of that run are archived on Zenodo
 (DOI: TO-BE-ASSIGNED):
 - `results_*/benchmarks`, `denet_metrics`, `denet_native` and `logs`;
 - `results_calib/` and `results_idle/` (incl. `denet.txt`);
 - `results_*/results/digest_*.tsv` and `results_same_outputs.txt`;
-- the load logs, and `paper.log` with its start stamp.
+- `load_node.txt`, `load_host.txt`, `paper.log` and `START`.
 
 Simulated reads and BAMs are not archived; `make paper` regenerates them.
 
