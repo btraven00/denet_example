@@ -8,4 +8,4 @@ dependencies:
   - snakemake=9.27.0
   - pip
   - pip:
-      - denet==0.10.2
+      - denet==0.10.3
