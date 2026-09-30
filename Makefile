@@ -26,12 +26,12 @@ DENET_BIN_DIR ?=
 TOOLS_PATH  = $(if $(DENET_BIN_DIR),$(abspath $(DENET_BIN_DIR)):)$(CURDIR)/$(TOOLS_ENV)/bin
 BENCH       = $(CONDA_RUN) && test -x "$(TOOLS_ENV)/bin/samtools" && PATH="$(TOOLS_PATH):$$PATH" $(SMK)
 
-.PHONY: all paper driver-env conda-envs caps idle-power baseline denet denet-native markdup-variants calib setup-r-env figures clean
+.PHONY: all paper driver-env conda-envs caps idle-power baseline denet denet-native markdup-variants check-outputs calib setup-r-env figures clean
 
 all: paper figures
 
 # every measurement in the paper, in one sequential run (about 5 h on an 8-core laptop)
-paper: idle-power baseline denet denet-native markdup-variants calib
+paper: idle-power baseline denet denet-native markdup-variants check-outputs calib
 
 driver-env:
 	source ~/miniconda3/bin/activate && \
@@ -75,13 +75,22 @@ markdup-variants: conda-envs
 	for v in $(MARKDUP); do \
 	  o=results_markdup_$${v%%:*} && rm -rf $$o && mkdir -p $$o && \
 	  cp -al results_denet/data results_denet/results $$o/ && \
-	  rm -f $$o/results/aligned.markdup.bam* && \
+	  rm -f $$o/results/aligned.markdup.bam* $$o/results/digest_*.tsv && \
 	  $(BENCH) --config use_denet=true $${v#*:} markdup_phase_log=true outdir=$$o $(CONFIG) \
-	    --allowed-rules markdup -- $$o/results/aligned.markdup.bam || exit 1; \
+	    --allowed-rules markdup digest_bam -- $$o/results/digest_bam.tsv || exit 1; \
 	  $(TOOLS_ENV)/bin/samtools flagstat $$o/results/aligned.markdup.bam | grep -m1 'duplicates$$' | cut -d' ' -f1 > $$o/duplicates.txt; \
 	done
 	echo "fixmate -u | sort -u | markdup" > results_markdup_round2/LABEL
 	python3 scripts/aggregate_markdup.py results_markdup_sort results_markdup_collate_fast results_markdup_round2 > results_markdup_summary.txt
+
+# monitoring must not change what the workflow computes, and the markdup rounds
+# must flag the same reads: compare the output digests (rules digest_bam and
+# digest_vcf) across every result directory; fails the run on any difference
+RESULT_DIRS = results_baseline results_denet results_denet_native \
+              results_markdup_sort results_markdup_collate_fast results_markdup_round2
+check-outputs:
+	python3 scripts/check_same_outputs.py $(wildcard $(RESULT_DIRS)) > results_same_outputs.txt; \
+	  s=$$?; cat results_same_outputs.txt; exit $$s
 
 # peak capture vs spike duration (Table S3): the randomised-phase ladder, a
 # fixed-phase arm, and spikes after 15 s, in Snakemake's 30 s sampling regime

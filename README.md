@@ -36,6 +36,28 @@ bcftools call -mv`).
 markdup has real work to do; at 0, markdup only sees coordinate collisions from
 oversampling.
 
+### Same inputs, same outputs
+
+`seed` (default 11) seeds both wgsim and the duplicate injection, so every
+condition and every run gets identical reads. Two unbenchmarked rules,
+`digest_bam` and `digest_vcf`, write content checksums of the outputs to
+`results/digest_*.tsv`:
+- the reads;
+- the duplicate-marked alignments, as sorted records without headers, with
+  the duplicate flag masked;
+- the number of duplicates flagged;
+- the variant records.
+
+`make check-outputs` (part of `make paper`) compares them across baseline,
+wrap, native and the three markdup rounds, and fails on any difference, so a
+monitoring mode that changed the results could not pass unnoticed.
+
+The one difference it tolerates, and reports, is which reads carry the
+duplicate flag. When copies in a duplicate set tie, `samtools markdup` keeps
+one by input order, and a name-sorted and a collated input present them
+differently. The number flagged, the alignments and the variant calls still
+match.
+
 ### Paper runs and quick runs
 
 The defaults reproduce the paper and take roughly 1 to 2 hours per condition on
@@ -97,6 +119,7 @@ above, so that contention can be reported rather than assumed away.
 (DOI: TO-BE-ASSIGNED):
 - `results_*/benchmarks`, `denet_metrics`, `denet_native` and `logs`;
 - `results_calib/` and `results_idle/` (incl. `denet.txt`);
+- `results_*/results/digest_*.tsv` and `results_same_outputs.txt`;
 - the load logs, and `paper.log` with its start stamp.
 
 Simulated reads and BAMs are not archived; `make paper` regenerates them.

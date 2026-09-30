@@ -25,6 +25,9 @@ n_chromosomes = config.get("n_chromosomes", 3)
 chr_length = config.get("chr_length", 1_000_000)
 bench_repeats = config.get("benchmark_repeats", 5)
 dup_fraction = float(config.get("dup_fraction", 0.0))
+# one seed for wgsim and the duplicate injection, so every condition and every
+# run gets the same reads and the outputs can be compared (see rule digest_bam)
+seed = int(config.get("seed", 11))
 
 
 def wrap(cmd, step):
@@ -146,6 +149,8 @@ rule all:
     input:
         [] if fused else f"{outdir}/results/aligned.bam.bai",
         f"{outdir}/results/variants.vcf.gz",
+        f"{outdir}/results/digest_bam.tsv",
+        f"{outdir}/results/digest_vcf.tsv",
         expand(
             "{outdir}/benchmarks/{step}.tsv",
             outdir=outdir,
@@ -216,15 +221,16 @@ rule simulate_reads:
         n_reads=n_reads,
         reads_prefix=f"{outdir}/data/reads",
         dup_fraction=dup_fraction,
+        seed=seed,
     shell:
         wrap(
             """(
-                wgsim -N {params.n_reads} -1 150 -2 150 -e 0.01 -r 0.001 \
+                wgsim -S {params.seed} -N {params.n_reads} -1 150 -2 150 -e 0.01 -r 0.001 \
                     {input.fa} {params.reads_prefix}_1.fq {params.reads_prefix}_2.fq &&
                 gzip -f {params.reads_prefix}_1.fq {params.reads_prefix}_2.fq &&
                 if awk 'BEGIN {{ exit !({params.dup_fraction} > 0) }}'; then
                     python scripts/inject_duplicates.py \
-                        {output.r1} {output.r2} --fraction {params.dup_fraction}
+                        {output.r1} {output.r2} --fraction {params.dup_fraction} --seed {params.seed}
                 fi
             ) > {log} 2>&1""",
             "simulate_reads",
@@ -408,3 +414,47 @@ rule call_variants:
                 | bcftools call --threads {threads} -mv -Oz -o {output.vcf} ) 2> {log}""",
             "call_variants",
         )
+
+
+# Content digests of the outputs, not benchmarked. Monitoring must not change
+# what the workflow computes, and the markdup rounds must flag the same reads;
+# scripts/check_same_outputs.py compares these files across result directories.
+# Alignments are compared as sorted records (bowtie2 -p writes reads in thread
+# order), headers are left out (they carry command lines and dates), and the
+# duplicate flag (1024) is masked: when copies in a duplicate set tie, markdup
+# keeps one by input order, which a name-sorted and a collated input present
+# differently. The number flagged must still match; which reads carry the flag
+# is recorded as duplicate_reads, for information.
+rule digest_bam:
+    input:
+        r1=f"{outdir}/data/reads_1.fq.gz",
+        r2=f"{outdir}/data/reads_2.fq.gz",
+        bam=f"{outdir}/results/aligned.markdup.bam",
+    output:
+        f"{outdir}/results/digest_bam.tsv",
+    conda:
+        "envs/genome_tools.yaml"
+    shell:
+        """
+        d() {{ md5sum | cut -d' ' -f1; }}
+        {{
+          printf 'reads\t%s\n' "$(zcat {input.r1} {input.r2} | d)"
+          printf 'alignments\t%s\n' "$(samtools view {input.bam} | awk 'BEGIN{{OFS="\t"}} {{$2 = and($2, compl(1024)); print}}' | cut -f1-11 | LC_ALL=C sort -S 1G | d)"
+          printf 'duplicate_reads\t%s\n' "$(samtools view -f 1024 {input.bam} | cut -f1,2 | LC_ALL=C sort -S 1G | d)"
+          printf 'n_duplicates\t%s\n' "$(samtools view -c -f 1024 {input.bam})"
+        }} > {output}
+        """
+
+
+rule digest_vcf:
+    input:
+        vcf=f"{outdir}/results/variants.vcf.gz",
+    output:
+        f"{outdir}/results/digest_vcf.tsv",
+    conda:
+        "envs/genome_tools.yaml"
+    shell:
+        """
+        printf 'variants\t%s\n' "$(bcftools view -H {input.vcf} | md5sum | cut -d' ' -f1)" > {output}
+        """
+
