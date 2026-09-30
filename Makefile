@@ -32,12 +32,12 @@ DENET_BIN_DIR ?=
 TOOLS_PATH  = $(if $(DENET_BIN_DIR),$(abspath $(DENET_BIN_DIR)):)$(CURDIR)/$(TOOLS_ENV)/bin
 BENCH       = $(CONDA_RUN) && test -x "$(TOOLS_ENV)/bin/samtools" && PATH="$(TOOLS_PATH):$$PATH" $(SMK)
 
-.PHONY: all paper driver-env conda-envs caps idle-power baseline denet denet-native markdup-variants check-outputs calib setup-r-env figures clean
+.PHONY: all paper driver-env conda-envs caps idle-power baseline denet denet-native markdup-variants check-outputs calib concurrency setup-r-env figures clean
 
 all: paper figures
 
 # every measurement in the paper, in one sequential run (about 5 h at CORES=16)
-paper: idle-power baseline denet denet-native markdup-variants check-outputs calib
+paper: idle-power baseline denet denet-native markdup-variants check-outputs calib concurrency
 
 driver-env:
 	$(CONDA_ACTIVATE) && \
@@ -109,6 +109,24 @@ calib: conda-envs
 	for a in ladder fixed long; do \
 	  python3 validation/calib/score.py results_calib/$$a.tsv --base-from results_calib/ladder.tsv > results_calib/$$a.scored.tsv; \
 	done
+
+# sampler cost under many concurrent jobs: CONC_JOBS jobs of 1.6 s (50 MiB
+# each) on CONC_CORES cores, Snakemake's psutil sampler vs denet native,
+# CONC_REPS times each; summary in results_concurrency/summary.tsv
+CONC_JOBS  ?= 200
+CONC_CORES ?= 32
+CONC_REPS  ?= 3
+concurrency:
+	rm -rf results_concurrency && mkdir -p results_concurrency
+	$(CONDA_RUN) && for r in $$(seq $(CONC_REPS)); do for m in psutil native; do \
+	  o=results_concurrency/$$m.r$$r; n=false; [ $$m = native ] && n=true; \
+	  t0=$$(date +%s.%N); \
+	  snakemake -s validation/concurrency.smk --cores $(CONC_CORES) --nolock \
+	    --config outdir=$$o native=$$n njobs=$(CONC_JOBS) > $$o.log 2>&1 || exit 1; \
+	  echo "$$t0 $$(date +%s.%N)" > $$o/makespan; \
+	done; done
+	python3 scripts/summarise_concurrency.py results_concurrency > results_concurrency/summary.tsv; \
+	  s=$$?; cat results_concurrency/summary.tsv; exit $$s
 
 setup-r-env:
 	$(CONDA_ACTIVATE) && \
