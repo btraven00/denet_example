@@ -57,6 +57,41 @@ PATH="$PWD/$ENV/bin:$PATH" snakemake --cores 4 --forceall --config use_denet=fal
 PATH="$PWD/$ENV/bin:$PATH" snakemake --cores 4 --forceall --config use_denet=true outdir=results_denet
 ```
 
+### Reproducing the paper's run
+
+Every number in the paper comes from one `make paper`, run pinned to a single
+NUMA node of a shared AMD EPYC 7742 server (4 NUMA nodes; node 3 is CPUs
+48–63 and their SMT siblings 112–127):
+
+```
+make driver-env conda-envs
+make caps                      # optional, needs sudo: RAPL energy and eBPF
+mpstat -P 48-63,112-127 10 > load_node3.txt &    # load on the pinned CPUs
+numactl --cpunodebind=3 --membind=3 make paper
+```
+
+`numactl` sets the CPU affinity and memory policy of `make`. Every process it
+starts inherits them, including Snakemake, each rule and denet, so the whole
+run uses one node's cores, L3 caches and local memory. List your host's nodes
+with `numactl --hardware`.
+
+Pinning does not reserve those CPUs. Other users' processes can still be
+scheduled on them. Keeping them off needs root, e.g. a cgroup cpuset:
+`systemctl set-property --runtime user.slice AllowedCPUs=0-47,64-111`.
+Without a reservation, log the load on the pinned CPUs for the whole run, as
+above, so that contention can be reported rather than assumed away.
+
+The paper's run was made without `make caps` (no sudo on that host), so it has
+no RAPL or eBPF data.
+
+**Archive.** The measurement outputs of that run are archived on Zenodo
+(DOI: TO-BE-ASSIGNED):
+- `results_*/benchmarks`, `denet_metrics`, `denet_native` and `logs`;
+- `results_calib/` and `results_idle/`;
+- the load logs, and `paper.log` with its start stamp.
+
+Simulated reads and BAMs are not archived; `make paper` regenerates them.
+
 ## Running locally
 
 ```
