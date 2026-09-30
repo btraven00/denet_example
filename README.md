@@ -64,11 +64,23 @@ NUMA node of a shared AMD EPYC 7742 server (4 NUMA nodes; node 3 is CPUs
 48–63 and their SMT siblings 112–127):
 
 ```
+# denet with eBPF: the conda package is built without it
+git clone --branch v0.10.3 https://github.com/btraven00/denet.git ~/denet-0.10.3
+(cd ~/denet-0.10.3 && cargo build --release --features gpu,ebpf --bin denet)
+
 make driver-env conda-envs
-make caps                      # optional, needs sudo: RAPL energy and eBPF
+make caps DENET_BIN_DIR=$HOME/denet-0.10.3/target/release   # needs sudo
 mpstat -P 48-63,112-127 10 > load_node3.txt &    # load on the pinned CPUs
-numactl --cpunodebind=3 --membind=3 make paper
+numactl --cpunodebind=3 --membind=3 make paper DENET_BIN_DIR=$HOME/denet-0.10.3/target/release
 ```
+
+`DENET_BIN_DIR` puts that build ahead of the conda package's `denet` for
+every step. Without it the conda package is used, which has no eBPF. `make
+caps` grants `cap_bpf`, `cap_perfmon` and `cap_dac_read_search` to whichever
+`denet` the runs will use: eBPF, hardware counters and the root-only RAPL
+energy counters. Without capabilities those fields are left out and the
+run still completes. `results_idle/denet.txt` records the binary each run
+used: path, version, SHA-256 and capabilities.
 
 `numactl` sets the CPU affinity and memory policy of `make`. Every process it
 starts inherits them, including Snakemake, each rule and denet, so the whole
@@ -81,13 +93,10 @@ scheduled on them. Keeping them off needs root, e.g. a cgroup cpuset:
 Without a reservation, log the load on the pinned CPUs for the whole run, as
 above, so that contention can be reported rather than assumed away.
 
-The paper's run was made without `make caps` (no sudo on that host), so it has
-no RAPL or eBPF data.
-
 **Archive.** The measurement outputs of that run are archived on Zenodo
 (DOI: TO-BE-ASSIGNED):
 - `results_*/benchmarks`, `denet_metrics`, `denet_native` and `logs`;
-- `results_calib/` and `results_idle/`;
+- `results_calib/` and `results_idle/` (incl. `denet.txt`);
 - the load logs, and `paper.log` with its start stamp.
 
 Simulated reads and BAMs are not archived; `make paper` regenerates them.

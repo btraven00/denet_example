@@ -19,7 +19,12 @@ PAPER_DIR ?=
 # only catches it by chance. Without --use-conda the rules' conda: directives
 # are ignored and the tools come from PATH.
 TOOLS_ENV   = $(shell $(CONDA_RUN) && $(SMK_ENVS) --list-conda-envs 2>/dev/null | awk -F'\t' '$$1=="envs/genome_tools.yaml"{print $$3}')
-BENCH       = $(CONDA_RUN) && test -x "$(TOOLS_ENV)/bin/samtools" && PATH="$(CURDIR)/$(TOOLS_ENV)/bin:$$PATH" $(SMK)
+# DENET_BIN_DIR: a directory whose denet is used instead of the conda package's,
+# e.g. a cargo build with eBPF, which the slim conda package leaves out:
+#   make paper DENET_BIN_DIR=$HOME/denet/target/release
+DENET_BIN_DIR ?=
+TOOLS_PATH  = $(if $(DENET_BIN_DIR),$(abspath $(DENET_BIN_DIR)):)$(CURDIR)/$(TOOLS_ENV)/bin
+BENCH       = $(CONDA_RUN) && test -x "$(TOOLS_ENV)/bin/samtools" && PATH="$(TOOLS_PATH):$$PATH" $(SMK)
 
 .PHONY: all paper driver-env conda-envs caps idle-power baseline denet denet-native markdup-variants calib setup-r-env figures clean
 
@@ -37,13 +42,19 @@ conda-envs:
 	$(CONDA_RUN) && \
 	$(SMK_ENVS) --config use_denet=false outdir=results_baseline --conda-create-envs-only
 
-# optional, once: lets wrap mode record CPU energy (RAPL), whose counters are root-only
+# optional, once: lets wrap mode record CPU energy (RAPL, root-only counters),
+# hardware counters and, in a build that has it, eBPF. Applies to the denet
+# the runs will use (DENET_BIN_DIR's if set)
 caps: conda-envs
-	sudo setcap cap_bpf,cap_perfmon,cap_dac_read_search=ep $$(readlink -f $(TOOLS_ENV)/bin/denet)
+	sudo setcap cap_bpf,cap_perfmon,cap_dac_read_search=ep $$(readlink -f $$(PATH="$(TOOLS_PATH):$$PATH" command -v denet))
 
 # idle CPU package power, to subtract from the energy in wrap-mode traces
 idle-power: conda-envs
-	mkdir -p results_idle && PATH="$(CURDIR)/$(TOOLS_ENV)/bin:$$PATH" denet -q -i 500 -m 500 -o results_idle/idle.jsonl run sleep 60
+	mkdir -p results_idle
+	# record which denet every step uses: path, version, checksum, capabilities
+	export PATH="$(TOOLS_PATH):$$PATH"; b=$$(readlink -f $$(command -v denet)); \
+	  { echo "$$b"; denet --version; sha256sum "$$b"; getcap "$$b" || true; } > results_idle/denet.txt
+	PATH="$(TOOLS_PATH):$$PATH" denet -q -i 500 -m 500 -o results_idle/idle.jsonl run sleep 60
 
 baseline: conda-envs
 	$(BENCH) --config use_denet=false outdir=results_baseline $(CONFIG) --forceall
@@ -74,7 +85,7 @@ markdup-variants: conda-envs
 
 # peak capture vs spike duration (Table S3): the randomised-phase ladder, a
 # fixed-phase arm, and spikes after 15 s, in Snakemake's 30 s sampling regime
-CALIB = $(CONDA_RUN) && PATH="$(CURDIR)/$(TOOLS_ENV)/bin:$$PATH" snakemake -s validation/calib/Snakefile --cores 1 --nolock
+CALIB = $(CONDA_RUN) && PATH="$(TOOLS_PATH):$$PATH" snakemake -s validation/calib/Snakefile --cores 1 --nolock
 calib: conda-envs
 	rm -rf results_calib && mkdir -p results_calib
 	$(CALIB) --config outdir=results_calib/ladder compare_out=results_calib/ladder.tsv $(CONFIG)
