@@ -8,7 +8,10 @@ CONFIG     ?=
 CONDA_RUN  := source ~/miniconda3/bin/activate && conda activate $(SMK_ENV)
 SMK        := snakemake --cores $(CORES)
 SMK_ENVS   := snakemake --use-conda --conda-frontend conda --cores 1
-PAPER_DIR  := $(HOME)/src/2025_denet_profiler_appnote
+# Where `make figures` also drops a copy of the rendered report. Unset by
+# default so a clean clone writes nothing outside the repository; set it to
+# your paper checkout to get the copy:  make figures PAPER_DIR=~/src/paper
+PAPER_DIR ?=
 
 # Benchmarks run with the rule environment activated once, not per job.
 # --use-conda activation runs a ~90 MB conda process for ~0.3 s at the start of
@@ -91,8 +94,11 @@ figures: setup-r-env
 	source ~/miniconda3/bin/activate && \
 	conda run -n rstats Rscript -e \
 	  "rmarkdown::render('analysis.Rmd', output_dir='figures')"
-	mkdir -p $(PAPER_DIR)/figures
-	cp figures/analysis.html $(PAPER_DIR)/figures/denet_benchmark.html
+	@if [ -n "$(PAPER_DIR)" ]; then \
+	  mkdir -p $(PAPER_DIR)/figures && \
+	  cp figures/analysis.html $(PAPER_DIR)/figures/denet_benchmark.html && \
+	  echo "copied report to $(PAPER_DIR)/figures/"; \
+	else echo "PAPER_DIR unset; report left in figures/analysis.html"; fi
 
 clean:
 	rm -rf results_baseline results_denet results_denet_native results_markdup_sort results_markdup_collate_fast \
