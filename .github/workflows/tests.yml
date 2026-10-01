@@ -72,6 +72,7 @@ jobs:
           path: |
             results_baseline/logs/
             results_baseline/benchmarks/
+            results_baseline/results/digest_*.tsv
             .snakemake/log/
           if-no-files-found: ignore
 
@@ -116,6 +117,7 @@ jobs:
             results_denet/logs/
             results_denet/benchmarks/
             results_denet/denet_metrics/
+            results_denet/results/digest_*.tsv
             .snakemake/log/
           if-no-files-found: ignore
 
@@ -148,6 +150,9 @@ jobs:
         with:
           name: denet-outputs
           path: .
+
+      - name: monitoring did not change the outputs
+        run: python3 scripts/check_same_outputs.py results_baseline results_denet
 
       - name: render report
         run: |

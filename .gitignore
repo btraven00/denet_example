@@ -1,1 +1,12 @@
 __pycache__/
+# conda envs and run state
+.snakemake/
+# outputs of make paper / make figures and of scripts/run_paper.sh
+results_*/
+results_*.txt
+figures/
+validation_out/
+START
+paper.log
+concurrency.log
+load_*.txt

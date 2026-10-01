@@ -126,8 +126,11 @@ snakemake -s validation/failures.smk --cores 4 --config outdir=validation_out/c4
 
 ## Results so far
 
-30x, Snakemake 9.27, denet 0.9.1 with the fix released in 0.10.0.
-jumpbox: 4 x Opteron 6376, idle. omni: EPYC 7742, shared, load ~30.
+30x, Snakemake 9.27, denet 0.9.1 with the fix released in 0.10.0, from the
+validation runs before the paper's run. jumpbox: 4 x Opteron 6376, idle. omni:
+EPYC 7742, shared, load ~30. The paper's own numbers come from `make paper`
+(denet 0.10.3, omni pinned to one NUMA node): its spike ladder is Table S3, and
+its concurrency result is the last row.
 
 | | native (denet) | psutil (Snakemake) | ground truth |
 |---|---|---|---|
@@ -138,7 +141,7 @@ jumpbox: 4 x Opteron 6376, idle. omni: EPYC 7742, shared, load ~30.
 | spikes of 0.05-0.25 s, idle laptop | 86-100% caught, 8/8 | 25-35%, 2/8 | 256 MiB |
 | spikes of 0.05-0.25 s, loaded omni | 80-100%, 7-8/8 | 18-34%, 2-3/8 | 256 MiB |
 | spikes of 0.5 s, loaded omni | 100%, 8/8 | 40%, 3/8 | 256 MiB |
-| 200 concurrent 1.6 s jobs, `--cores 32` | 19 s, peak RSS for 200/200 | 37-39 s, peak RSS for 0-5/200 | |
+| 200 concurrent 1.6 s jobs, `--cores 32` (`make concurrency`, paper run, 3 repeats) | 18.5 +/- 0.2 s, peak RSS for 200/200 | 30.5 +/- 0.3 s, peak RSS for 0/200 | |
 
 Why psutil falls short: Snakemake 9.27 samples each job every 0.5 s for the
 first 30 samples (about 15 s), then every 30 s (`BENCHMARK_INTERVAL_SHORT`,
