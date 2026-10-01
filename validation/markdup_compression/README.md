@@ -4,7 +4,7 @@ Supporting material for round 2 of the paper's case study. The denet traces
 (3 repeats of 4 variants, plus the same runs with denet 0.10.2) are in the
 Zenodo archive with the paper's run; the flame graphs, their folded stacks and
 the scripts are here. The paper
-says `fixmate` "ran at 130–280% CPU for light
+says `fixmate` "ran at 170–280% CPU for light
 work: most of it compressed data that the next stage decompressed at once",
 and that passing uncompressed records (`-u`) and dropping the grouping step
 halved the rule's wall time. That reading came from the per-process CPU trace.
