@@ -20,6 +20,7 @@ Python package (`pip install denet`) for native mode.
 | `truncation/` | Are bytes written just before a process exits counted at all? | a known volume written after a known idle period |
 | `concurrency.smk` | Does the sampler slow down Snakemake when many jobs run at once? | wall time with psutil vs denet native |
 | `failures.smk` | Do failing, killed and `run:` jobs behave the same under denet native? | Snakemake's behaviour with psutil |
+| `footprint/` | How much memory does denet itself add, and does Snakemake see it? | denet's own VmHWM; 50 MiB jobs bare vs wrapped |
 | `markdup_buffers/` | Is the markdup peak two sort buffers held at once? | peaks under independently set sort memory limits |
 | `markdup_compression/` | Is round 2's gain really the compressed pipes? (ablation, instruction counts, eBPF off-CPU, flame graphs) | a 2 × 2 ablation with identical duplicate counts |
 
