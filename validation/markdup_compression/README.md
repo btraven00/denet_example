@@ -1,15 +1,15 @@
 # Compressed pipes in duplicate marking: what each instrument shows
 
-Supporting material for round 2 of the paper's case study. The denet traces
-(3 repeats of 4 variants, plus the same runs with denet 0.10.2) are in the
-Zenodo archive with the paper's run; the flame graphs, their folded stacks and
-the scripts are here. The paper
-says `fixmate` "ran at 170–280% CPU for light
-work: most of it compressed data that the next stage decompressed at once",
-and that passing uncompressed records (`-u`) and dropping the grouping step
-halved the rule's wall time. That reading came from the per-process CPU trace.
-Here it is tested directly, and the same run is read with three instruments:
-denet's per-process records, hardware counters, and a `perf` flame graph.
+Supporting material for round 2 of the paper's case study. The paper reads
+from denet's per-process CPU trace that `fixmate` spent most of its CPU
+compressing data that the next stage decompressed at once, and that passing
+uncompressed records (`-u`) and dropping the grouping step halved the rule's
+wall time. This experiment tests that with a 2 × 2 ablation, read with denet's
+per-process records, hardware counters and a `perf` flame graph.
+
+The denet traces (3 repeats of 4 variants, plus the same runs with denet
+0.10.2) are in the Zenodo archive with the paper's run; the flame graphs,
+their folded stacks and the scripts are here.
 
 ## Setup
 
@@ -65,7 +65,7 @@ Duplicate calls are identical in every run (668,534 reads flagged).
 - In A, `fixmate` reads 1,380 MB of uncompressed records from `collate` and
   writes 309 MB, a 4.5× compression. The 309 MB go through an in-memory pipe
   to `sort`, which decompresses them at once.
-- The bytes saved cost CPU and buy nothing, because a pipe is not a disk.
+- Compressing data for an in-memory pipe costs CPU and saves nothing.
   `sort`'s own writes also include its temporary spill files, which stay
   compressed in every variant.
 
@@ -103,7 +103,6 @@ omitted for that reason: 491 s summed over its many threads.
   compressor, mostly `deflate_compress_lazy`, and 7% inside the decompressor.
 - **B and D:** about 50% compress and 6% decompress. What remains is markdup
   writing the final BAM and sort compressing its spills.
-- Open `perf/flame.*.svg` in a browser to explore them interactively.
 
 What the flame graph *cannot* say is which stage spends those cycles.
 - Every process is named `samtools`.
@@ -128,12 +127,10 @@ The flame graph also has nothing to say about memory or I/O over time.
 | Memory and I/O over time | yes | no |
 | Needs root and symbols | eBPF parts only | kernel stacks yes; symbols for readable frames |
 
-The two are complementary. denet located the problem, in the stage and
-resource: fixmate burning CPU while moving little work. The flame graph
-confirms the mechanism at function level. The 2×2 ablation is the causal
-test, and it supports the manuscript's round-2 reading, with one refinement:
-the uncompressed pipes, not dropping the grouping step, account for most of
-the gain.
+denet located the problem in a stage and a resource (fixmate burning CPU
+while moving little work), the flame graph shows the function, and the
+ablation shows that the uncompressed pipes, not dropping the grouping step,
+account for most of the gain.
 
 ## Caveats
 
@@ -149,9 +146,3 @@ the gain.
 - `perf` is 6.8.12 from Ubuntu's `linux-tools-generic`, run in the container
   against the host kernel 7.1.5. `inferno` produced the flame graphs.
 
-## Possible manuscript refinement
-
-In round 2, "Passing uncompressed records between stages (`-u`), and dropping
-the grouping step … cut wall time to 42 s" could credit `-u` with most of the
-effect. That would need the same ablation at full scale in the 0.10.3 re-run,
-so it is not proposed yet.

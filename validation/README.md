@@ -2,7 +2,7 @@
 
 Snakemake's `benchmark:` directive samples each job with psutil. These scripts
 measure how far those numbers, and denet's, are from ground truth, on the same
-job executions. They justify the discrepancies between psutil and denet
+job executions. They explain the differences between psutil and denet
 reported in the paper.
 
 All commands run from the repository root. Put the rule environment's tools on
@@ -125,10 +125,10 @@ snakemake -s validation/failures.smk --cores 4 --config outdir=validation_out/c4
 
 (`fails`, `killed` and `pyrun` are the three targets in `failures.smk`.)
 
-## Results so far
+## Results
 
-30x, Snakemake 9.27, denet 0.9.1 with the fix released in 0.10.0, from the
-validation runs before the paper's run. jumpbox: 4 x Opteron 6376, idle. omni:
+30x, Snakemake 9.27, denet 0.9.1 patched as later released in 0.10.0, from
+the validation runs before the paper's run. jumpbox: 4 x Opteron 6376, idle. omni:
 EPYC 7742, shared, load ~30. The paper's own numbers come from `make paper`
 (denet 0.10.3, omni pinned to one NUMA node): its spike ladder is Table S3, and
 its concurrency result is the last row.
@@ -151,7 +151,7 @@ first 30 samples (about 15 s), then every 30 s (`BENCHMARK_INTERVAL_SHORT`,
 time and I/O are taken from the last sample, so up to the final 30 s of a
 job's work, and short-lived processes, are missed. It also reads each
 process's full memory map (USS/PSS) on every sample, inside Snakemake's own
-process, which is what slows the scheduler under many concurrent jobs.
+process, the likely reason the scheduler slows under many concurrent jobs.
 
 ## Caveats
 

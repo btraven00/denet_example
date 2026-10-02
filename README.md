@@ -1,11 +1,13 @@
 Usage example for [denet](https://github.com/btraven00/denet) in bioinformatics.
 
-Runs a simulated short-read alignment workflow with [Snakemake](https://snakemake.readthedocs.io) under two conditions and compares wall-clock time, peak RSS, and per-rule resource timeseries in an HTML report and a PDF figure.
+Runs a simulated short-read alignment workflow with [Snakemake](https://snakemake.readthedocs.io) under several conditions and compares wall-clock time, peak RSS, and per-rule resource timeseries in an HTML report and a PDF figure.
 
-The two conditions are:
+The conditions are:
 
 - baseline: plain snakemake, no denet
 - denet wrap: each rule's command runs under `denet run`, which writes a JSONL timeseries per step
+- denet native: denet's Python API replaces the sampler behind Snakemake's `benchmark:` directive (`scripts/denet_native.py`)
+- markdup variants: the duplicate-marking rule as originally written and after each of the two remediation rounds
 
 ## Requirements
 
@@ -126,7 +128,9 @@ assumed away.
 - `results_*/benchmarks`, `denet_metrics`, `denet_native` and `logs`;
 - `results_calib/`, `results_idle/` (incl. `denet.txt`) and `results_concurrency/`;
 - `results_*/results/digest_*.tsv` and `results_same_outputs.txt`;
-- `load_node.txt`, `load_host.txt`, `paper.log` and `START`.
+- `load_node.txt`, `load_host.txt`, `paper.log` and `START`;
+- the outputs of the `validation/` experiments cited in the paper
+  (`footprint/`, `markdup_buffers/`, `markdup_stalls/`, `markdup_compression/`).
 
 Simulated reads and BAMs are not archived; `make paper` regenerates them.
 
@@ -138,7 +142,7 @@ make denet         # results in results_denet/
 make figures       # renders analysis.Rmd to figures/analysis.html and figures/denet_benchmark.pdf
 ```
 
-`make all` runs all three targets in sequence.
+`make all` runs `make paper` and then `make figures`.
 
 ## Output
 
@@ -157,7 +161,7 @@ behaviour under many concurrent jobs. They explain why Snakemake's psutil-based
 
 ## CI/CD
 
-The workflow in `.github/workflows/tests.yml` runs on every push to `master` and on pull requests. It has five jobs:
+The workflow in `.github/workflows/tests.yml` runs on every push to `master` and on pull requests. It has four jobs:
 
 - `dry-run`: validates the Snakefile DAG without executing anything.
 - `integration-baseline`: runs the baseline condition and uploads logs and benchmarks as artifacts.

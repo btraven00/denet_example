@@ -45,5 +45,4 @@ The two signals agree: the upstream stages are not merely idle during a
 spill, they are blocked, and they unblock when the coordinate sort resumes
 reading. Which kernel wait they sleep in (a pipe write, rather than disk I/O)
 is not in denet 0.10.3's output: the probe captures off-CPU stack IDs, but the
-JSONL leaves them out, and it records waits at wake-up rather than in time.
-Both are candidates for a later release.
+JSONL leaves them out. denet PR #65 writes them out with named kernel stacks.
