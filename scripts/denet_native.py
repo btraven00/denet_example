@@ -10,6 +10,12 @@ This relies on Snakemake internals, checked against 9.27: shell.py imports
 snakemake.benchmark.benchmarked when a job runs, and benchmarked() looks up
 BenchmarkTimer as a module global. denet has no USS/PSS, so those columns are
 NA in native TSVs, which also marks them as denet-sampled.
+
+The DenetBenchmarkTimer should only be taken as what it is: a rough Proof of
+Concept implementation of how a transparent BenchmarkTimer could look like in
+snakemake - but please do not use this in production code. Any serious
+integration should be done properly, i.e. starting with proposing a common
+stable interface within Snakemake itself. You've been warned :)
 """
 
 import json
