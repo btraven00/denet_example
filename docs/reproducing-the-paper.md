@@ -43,7 +43,7 @@ Without a reservation, the load logs let contention be reported rather than
 assumed away.
 
 **Archive.** The measurement outputs of that run are archived on Zenodo
-(DOI: TO-BE-ASSIGNED):
+([10.5281/zenodo.23105223](https://doi.org/10.5281/zenodo.23105223)):
 - `results_*/benchmarks`, `denet_metrics`, `denet_native` and `logs`;
 - `results_calib/`, `results_idle/` (incl. `denet.txt`) and `results_concurrency/`;
 - `results_*/results/digest_*.tsv` and `results_same_outputs.txt`;

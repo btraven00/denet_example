@@ -79,8 +79,10 @@ memory of short rules. The Makefile targets do this for you.
 
 Every number in the paper comes from one `make paper`, pinned to a single NUMA
 node of a shared AMD EPYC 7742, with an eBPF-enabled `denet` build and the
-capabilities it needs. The full recipe, the pinning caveats and the Zenodo
-archive contents are in [docs/reproducing-the-paper.md](docs/reproducing-the-paper.md).
+capabilities it needs. Its outputs are archived on Zenodo
+([10.5281/zenodo.23105223](https://doi.org/10.5281/zenodo.23105223)); the full
+recipe, the pinning caveats and the archive contents are in
+[docs/reproducing-the-paper.md](docs/reproducing-the-paper.md).
 
 ## Running locally
 
