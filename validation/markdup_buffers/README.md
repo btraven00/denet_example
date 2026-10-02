@@ -17,11 +17,9 @@ peak, and how many samples found both sorts at 80% of their peaks at once.
 ## Result
 
 2 M read pairs (the first third of the paper's `aligned_unsorted.bam`),
-samtools 1.20, two repeats, laptop (Ryzen 9 PRO 7940HS). denet built from the
-v0.10.3 source (PR #63; the build predates the release's version bump and
-reports 0.10.2). Limits below the default (768 MB) so that both sorts fill
-their buffers at this size. An earlier pass with denet 0.6.0 gave the same
-peaks to within 1%.
+samtools 1.20, two repeats, laptop (Ryzen 9 PRO 7940HS). denet 0.10.3.
+Limits below the default (768 MB) so that both sorts fill their buffers at
+this size.
 
 | name-sort limit (MB) | coord-sort limit (MB) | rule peak (MB) | name-sort peak (MB) | coord-sort peak (MB) | samples with both near peak |
 |---|---|---|---|---|---|
@@ -49,5 +47,5 @@ addresses only its own share, which is why the paper removes the name sort
 rather than limiting it.
 
 `summarise.py` identifies the two sorts from denet's per-child command-line
-records (denet >= 0.10); for older traces it falls back to PID order, as the
-four samtools stages start in pipeline order.
+records; for traces without them it falls back to PID order, as the four
+samtools stages start in pipeline order.

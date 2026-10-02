@@ -7,8 +7,7 @@ uncompressed records (`-u`) and dropping the grouping step halved the rule's
 wall time. This experiment tests that with a 2 × 2 ablation, read with denet's
 per-process records, hardware counters and a `perf` flame graph.
 
-The denet traces (3 repeats of 4 variants, plus the same runs with denet
-0.10.2) are in the Zenodo archive with the paper's run; the flame graphs,
+The denet traces (3 repeats of 4 variants) are in the Zenodo archive with the paper's run; the flame graphs,
 their folded stacks and the scripts are here.
 
 ## Setup
@@ -18,7 +17,7 @@ their folded stacks and the scripts are here.
 - **Tools:** samtools 1.20, 2 threads per stage, as in the paper.
 - **Host:** laptop, AMD Ryzen 9 PRO 7940HS (16 threads), 64 GB, kernel 7.1.5.
   Runs are sequential.
-- **Profiler:** denet built from PR #63, released as 0.10.3, `-i 50 -m 500 --enable-ebpf`. It ran as root in a
+- **Profiler:** denet 0.10.3, `-i 50 -m 500 --enable-ebpf`. It ran as root in a
   `--privileged --pid=host` container, the equivalent of `make caps`.
 - **Design:** 2 × 2. Grouping step (`collate -f`, or none) × pipes
   (compressed BGZF, or `-u`). Three repeats of each.
@@ -81,7 +80,7 @@ Duplicate calls are identical in every run (668,534 reads flagged).
 Compressed pipes double the instructions the pipeline executes, whichever
 grouping step is used.
 
-### Off-CPU time (denet eBPF, per process; needs 0.10.3)
+### Off-CPU time (denet eBPF, per process)
 
 | variant | sort off-CPU (s) | markdup off-CPU (s) |
 |---|---|---|
@@ -123,7 +122,7 @@ The flame graph also has nothing to say about memory or I/O over time.
 |---|---|---|
 | Which stage costs what? | yes, directly (CPU, memory, I/O per child) | no: every process is `samtools`, and stacks are leaf-only without frame pointers |
 | What is the CPU doing? | indirectly (CPU vs bytes moved, instructions) | yes, per function: `deflate_compress_lazy` |
-| Who waits on whom? | off-CPU per process (eBPF, denet >= 0.10.3) | no (on-CPU only; an off-CPU flame graph needs bcc/BTF) |
+| Who waits on whom? | off-CPU per process (eBPF) | no (on-CPU only; an off-CPU flame graph needs bcc/BTF) |
 | Memory and I/O over time | yes | no |
 | Needs root and symbols | eBPF parts only | kernel stacks yes; symbols for readable frames |
 
@@ -136,9 +135,6 @@ account for most of the gain.
 
 - One host, sequential runs, 2 M pairs (a third of the paper's input); three
   repeats per variant.
-- The eBPF off-CPU and syscall numbers need denet 0.10.3 (PR #63). With
-  0.10.2 they cover only the parent shell (those traces are in the archive for
-  comparison).
 - The syscall counts (eBPF) rise with `-u` (943 k in A vs 1,175 k in B),
   because moving more bytes takes more `read`/`write` calls. They are
   consistent with the above but weaker evidence than bytes, CPU and
