@@ -101,24 +101,33 @@ make figures       # renders analysis.Rmd to figures/analysis.html and figures/d
 
 ## Reading the output
 
-Each wrap-mode step writes one JSONL file to `results_denet/denet_metrics/`,
-one record per sample, plus `child` records naming each process in the tree
-(see [denet's data format](https://github.com/btraven00/denet/blob/main/docs/data-format.md)).
-To see what the aggregate benchmark hides, compare the two for `markdup`:
+Each wrap-mode step writes one JSONL file per repeat to
+`results_denet/denet_metrics/`, with a `tree` record per sample, a `child`
+record naming every process in the tree, and an `exit` record (see
+[denet's data format](https://github.com/btraven00/denet/blob/main/docs/data-format.md)).
+To see what an aggregate benchmark hides, compare the two for `markdup`:
 
 ```
 # what Snakemake reports: one peak for the whole rule
 cut -f1,3,8 results_denet/benchmarks/markdup.tsv
 
-# what denet records: resident memory per process over time
-jq -r 'select(.children) | [.ts_ms, (.children[] | "\(.command):\(.mem_rss_kb/1024|floor)")] | @tsv' \
-  results_denet/denet_metrics/markdup.jsonl | head -40
+# which processes exist, with their full command lines
+jq -r 'select(.kind=="child") | "\(.pid)\t\(.cmd)"' \
+  results_denet/denet_metrics/markdup.*.jsonl
+
+# resident memory per process over time, in MB
+jq -r 'select(.kind=="tree")
+       | [.ts_ms, (.children[] | "\(.pid):\(.metrics.mem_rss_kb/1024|floor)")]
+       | @tsv' results_denet/denet_metrics/markdup.*.jsonl
 ```
 
-The rule's 3.3 GB peak is not one stage accumulating: the name sort and the
-coordinate sort each fill a buffer and hold it at the same time, and the drop
-is the name sort exiting. `figures/analysis.html` plots this per process, and
-`validation/markdup_buffers/` measures it directly.
+The single 3.3 GB peak is not one stage accumulating. Partway through the rule
+two of the `samtools` processes hold about 1.6 GB *each, at the same time* --
+the name sort and the coordinate sort, both at their buffer limit -- and the
+abrupt drop is the name sort exiting, not a phase change within one stage. That
+is what motivates replacing the name sort with `samtools collate`.
+`figures/analysis.html` plots it per process, and `validation/markdup_buffers/`
+measures it directly.
 
 ## Validation
 
