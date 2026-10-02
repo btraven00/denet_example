@@ -109,7 +109,7 @@ denet -o late.jsonl -i 50 -m 500 -q run \
 | 20 s | 0 MB | 126 MB | 512 MB |
 | 40 s | 0 MB | 512 MB | 512 MB |
 
-denet recovers 25-100% depending on where its last sample falls. **Both
+denet recovers 25-100% depending on where its last sample falls. The same effect in the paper's own runs is checked by `scripts/check_truncation.py`, which reconstructs Snakemake's sample times from denet's trace and compares its cumulative total at that instant against what Snakemake reported. **Both
 samplers truncate; the faster one truncates less.** `two_writers.py` shows the
 bytes are not lost to the child exiting: 374 + 542 MiB, each writer gone before
 the next started, still totalled 916 MB in both, because a reaped child's I/O
