@@ -1,6 +1,9 @@
 Usage example for [denet](https://github.com/btraven00/denet) in bioinformatics.
 
-Runs a simulated short-read alignment workflow with [Snakemake](https://snakemake.readthedocs.io) under several conditions and compares wall-clock time, peak RSS, and per-rule resource timeseries in an HTML report and a PDF figure.
+Runs a simulated short-read alignment workflow with
+[Snakemake](https://snakemake.readthedocs.io) under several conditions and
+compares wall-clock time, peak RSS, and per-rule resource timeseries in an HTML
+report and a PDF figure.
 
 The conditions are:
 
@@ -68,71 +71,16 @@ The defaults reproduce the paper and take roughly 1 to 2 hours per condition on
 the CI scale, e.g. `--config n_reads=10000 n_chromosomes=2 chr_length=100000
 benchmark_repeats=1`.
 
-Benchmark runs activate the rule environment once instead of per job:
-`--use-conda` starts every job by running a ~90 MB `conda` process for ~0.3 s,
-which would dominate the peak memory of short rules. Build the environment,
-put it on `PATH`, and run without `--use-conda` (the `conda:` directives are
-then ignored). The Makefile targets do this for you.
-
-```
-snakemake --use-conda --conda-create-envs-only --cores 1
-ENV=$(snakemake --use-conda --list-conda-envs --cores 1 | awk -F'\t' '$1=="envs/genome_tools.yaml"{print $3}')
-PATH="$PWD/$ENV/bin:$PATH" snakemake --cores 4 --forceall --config use_denet=false outdir=results_baseline
-PATH="$PWD/$ENV/bin:$PATH" snakemake --cores 4 --forceall --config use_denet=true outdir=results_denet
-```
+Benchmark runs put the rule environment on `PATH` and skip `--use-conda`,
+because starting every job with a ~90 MB `conda` process would dominate the peak
+memory of short rules. The Makefile targets do this for you.
 
 ### Reproducing the paper's run
 
-Every number in the paper comes from one `make paper`, run pinned to a single
-NUMA node of a shared AMD EPYC 7742 server (4 NUMA nodes; node 3 is CPUs
-48–63 and their SMT siblings 112–127):
-
-```
-# denet with eBPF: the conda package is built without it
-git clone --branch v0.10.3 https://github.com/btraven00/denet.git ~/denet-0.10.3
-(cd ~/denet-0.10.3 && cargo build --release --features gpu,ebpf --bin denet)
-
-make driver-env conda-envs
-make caps DENET_BIN_DIR=$HOME/denet-0.10.3/target/release   # needs sudo
-NUMA_NODE=3 scripts/run_paper.sh DENET_BIN_DIR=$HOME/denet-0.10.3/target/release
-```
-
-On a host without `~/miniconda3`, set `CONDA_RUN` (see the top of the
-Makefile) to put the driver env and a `conda` executable on `PATH` instead.
-
-`DENET_BIN_DIR` puts that build ahead of the conda package's `denet` for
-every step. Without it the conda package is used, which has no eBPF. `make
-caps` grants `cap_bpf`, `cap_perfmon` and `cap_dac_read_search` to whichever
-`denet` the runs will use: eBPF, hardware counters and the root-only RAPL
-energy counters. Without capabilities those fields are left out and the
-run still completes. `results_idle/denet.txt` records the binary each run
-used: path, version, SHA-256 and capabilities.
-
-`scripts/run_paper.sh` runs `make paper` under `numactl --cpunodebind=3
---membind=3`. It logs the load on that node's CPUs (`load_node.txt`) and on the
-whole host (`load_host.txt`) every 10 s, and stamps `START` with the time,
-load, node and commit at the start and the exit status at the end.
-`numactl` sets the CPU affinity and memory policy of `make`. Every process it
-starts inherits them, including Snakemake, each rule and denet, so the whole
-run uses one node's cores, L3 caches and local memory. List your host's nodes
-with `numactl --hardware`.
-
-Pinning does not reserve those CPUs. Other users' processes can still be
-scheduled on them. Keeping them off needs root, e.g. a cgroup cpuset:
-`systemctl set-property --runtime user.slice AllowedCPUs=0-47,64-111`.
-Without a reservation, the load logs let contention be reported rather than
-assumed away.
-
-**Archive.** The measurement outputs of that run are archived on Zenodo
-(DOI: TO-BE-ASSIGNED):
-- `results_*/benchmarks`, `denet_metrics`, `denet_native` and `logs`;
-- `results_calib/`, `results_idle/` (incl. `denet.txt`) and `results_concurrency/`;
-- `results_*/results/digest_*.tsv` and `results_same_outputs.txt`;
-- `load_node.txt`, `load_host.txt`, `paper.log` and `START`;
-- the outputs of the `validation/` experiments cited in the paper
-  (`footprint/`, `markdup_buffers/`, `markdup_stalls/`, `markdup_compression/`).
-
-Simulated reads and BAMs are not archived; `make paper` regenerates them.
+Every number in the paper comes from one `make paper`, pinned to a single NUMA
+node of a shared AMD EPYC 7742, with an eBPF-enabled `denet` build and the
+capabilities it needs. The full recipe, the pinning caveats and the Zenodo
+archive contents are in [docs/reproducing-the-paper.md](docs/reproducing-the-paper.md).
 
 ## Running locally
 
@@ -151,6 +99,27 @@ make figures       # renders analysis.Rmd to figures/analysis.html and figures/d
 - `figures/analysis.html`: interactive HTML report
 - `figures/denet_benchmark.pdf`: figure for the paper
 
+## Reading the output
+
+Each wrap-mode step writes one JSONL file to `results_denet/denet_metrics/`,
+one record per sample, plus `child` records naming each process in the tree
+(see [denet's data format](https://github.com/btraven00/denet/blob/main/docs/data-format.md)).
+To see what the aggregate benchmark hides, compare the two for `markdup`:
+
+```
+# what Snakemake reports: one peak for the whole rule
+cut -f1,3,8 results_denet/benchmarks/markdup.tsv
+
+# what denet records: resident memory per process over time
+jq -r 'select(.children) | [.ts_ms, (.children[] | "\(.command):\(.mem_rss_kb/1024|floor)")] | @tsv' \
+  results_denet/denet_metrics/markdup.jsonl | head -40
+```
+
+The rule's 3.3 GB peak is not one stage accumulating: the name sort and the
+coordinate sort each fill a buffer and hold it at the same time, and the drop
+is the name sort exiting. `figures/analysis.html` plots this per process, and
+`validation/markdup_buffers/` measures it directly.
+
 ## Validation
 
 `validation/` holds the scripts that check the benchmark numbers against ground
@@ -161,17 +130,10 @@ behaviour under many concurrent jobs. They explain why Snakemake's psutil-based
 
 ## CI/CD
 
-The workflow in `.github/workflows/tests.yml` runs on every push to `master` and on pull requests. It has four jobs:
-
-- `dry-run`: validates the Snakefile DAG without executing anything.
-- `integration-baseline`: runs the baseline condition and uploads logs and benchmarks as artifacts.
-- `integration-denet`: runs the denet wrap condition, and uploads logs, benchmarks, and denet metrics as artifacts.
-- `render-report`: downloads artifacts from both integration jobs and
-  renders the HTML report and PDF figure, uploaded as artifacts on success.
-
-The two integration jobs run in parallel. CI uses reduced parameters (10k
-reads, 2 chromosomes, 100 kb each, 3 benchmark repeats) to keep runtime short.
-Rule conda environments, including denet, are cached between runs.
+`.github/workflows/tests.yml` runs on every push and pull request: a DAG
+dry-run, the baseline and denet-wrap conditions in parallel, and a report
+render from both. CI uses reduced parameters (10k reads, 2 chromosomes of
+100 kb, 3 repeats); rule conda environments are cached.
 
 ## License
 
@@ -180,4 +142,5 @@ GPLv3
 ## Contact
 
 ben.uzh at proton.me
+
 izaskun mallona work at gmail com
