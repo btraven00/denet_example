@@ -179,4 +179,5 @@ GPLv3
 
 ## Contact
 
+ben.uzh at proton.me
 izaskun mallona work at gmail com
